@@ -2,6 +2,7 @@ from typing import Optional, Tuple
 
 import idc
 import idaapi
+import ida_ida
 import ida_kernwin as kw
 
 from capstone.x86_const import *
@@ -106,6 +107,21 @@ def is_gp_reg(r) -> bool:
 
 
 def get_bitness() -> int:
+    if idaapi.IDA_SDK_VERSION < 900:
+        return get_bitness_old()
+    else:
+        return get_bitness_new()
+
+def get_bitness_new() -> int:
+    if ida_ida.inf_is_64bit():
+        size = 64
+    elif ida_ida.inf_is_32bit_exactly():
+        size = 32
+    else:
+        size = 16
+    return size
+
+def get_bitness_old() -> int:
     info = idaapi.get_inf_structure()
 
     if info.is_64bit():
@@ -114,7 +130,6 @@ def get_bitness() -> int:
         size = 32
     else:
         size = 16
-
     return size
 
 
