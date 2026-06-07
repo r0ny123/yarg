@@ -1,0 +1,39 @@
+{
+  "$schema": "https://hcli.docs.hex-rays.com/schemas/ida-plugin.json",
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "yarg",
+    "version": "1.0.0",
+    "entryPoint": "yarg.py",
+    "description": "Yet another rule generator for Yara",
+    "license": "MIT",
+    "categories": [
+      "malware-analysis",
+      "api-scripting-and-automation"
+    ],
+    "keywords": [
+      "yara",
+      "signature-generation",
+      "yara-rules",
+      "pattern-matching",
+      "reverse-engineering"
+    ],
+    "urls": {
+      "repository": "https://github.com/r0ny123/yarg"
+    },
+    "authors": [
+      {
+        "name": "immortalp0ny",
+        "email": "39289915+immortalp0ny@users.noreply.github.com"
+      }
+    ],
+    "pythonDependencies": [
+      "ida-domain==0.5.0",
+      "capstone==5.0.9",
+      "yara-x==1.17.0"
+    ],
+    "idaVersions": [
+      "9.3"
+    ]
+  }
+}

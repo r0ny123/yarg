@@ -1,14 +1,14 @@
-import idautils
-
 from binascii import hexlify
 
+from .ida_domain_bridge import has_xrefs_to
 from .locator import *
 from .utils import SettingsDialog, is_gp_reg, is_stack_reg, TEMPLATE_SYMBOL, get_bitness, dbg_print, __debugmode__
 
 
 class OperandParameterizer:
-    def __init__(self, instr):
+    def __init__(self, instr, db=None):
         self._instr = instr
+        self._db = db
 
         if __debugmode__:
             c = -1
@@ -35,7 +35,7 @@ class OperandParameterizer:
         B = 0
         X = 0
         if instr.rex:
-            prefix = instr.rex & 0xf
+            prefix = instr.rex & 0xF
 
             R = (prefix & 4) >> 2
             B = prefix & 1
@@ -88,8 +88,11 @@ class OperandParameterizer:
                 j = 1
 
         if rm_op and self.modrm.is_mem_with_rm_base_reg():
-            if is_stack_reg(rm_op.mem.base) and settings.cSRegistersParam.checked \
-                    and rm_op.mem.base in settings.sp_regs:
+            if (
+                is_stack_reg(rm_op.mem.base)
+                and settings.cSRegistersParam.checked
+                and rm_op.mem.base in settings.sp_regs
+            ):
                 j = 1
 
             if is_gp_reg(rm_op.mem.base) and settings.cGpRegistersParam.checked and rm_op.mem.base in settings.gp_regs:
@@ -113,21 +116,37 @@ class OperandParameterizer:
             return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}"
 
         j = 0
-        if self.sib.is_mem_with_base_reg() and is_stack_reg(sib_op.mem.base) and settings.cSRegistersParam.checked \
-                and sib_op.mem.base in settings.sp_regs:
+        if (
+            self.sib.is_mem_with_base_reg()
+            and is_stack_reg(sib_op.mem.base)
+            and settings.cSRegistersParam.checked
+            and sib_op.mem.base in settings.sp_regs
+        ):
             j = 1
 
-        if self.sib.is_mem_with_base_reg() and is_gp_reg(sib_op.mem.base) and settings.cGpRegistersParam.checked \
-                and sib_op.mem.base in settings.gp_regs:
+        if (
+            self.sib.is_mem_with_base_reg()
+            and is_gp_reg(sib_op.mem.base)
+            and settings.cGpRegistersParam.checked
+            and sib_op.mem.base in settings.gp_regs
+        ):
             j = 1
 
         i = 0
-        if self.sib.is_mem_with_index() and is_stack_reg(sib_op.mem.index) and settings.cSRegistersParam.checked \
-                and sib_op.mem.index in settings.sp_regs:
+        if (
+            self.sib.is_mem_with_index()
+            and is_stack_reg(sib_op.mem.index)
+            and settings.cSRegistersParam.checked
+            and sib_op.mem.index in settings.sp_regs
+        ):
             i = 1
 
-        if self.sib.is_mem_with_index() and is_gp_reg(sib_op.mem.index) and settings.cGpRegistersParam.checked \
-                and sib_op.mem.index in settings.gp_regs:
+        if (
+            self.sib.is_mem_with_index()
+            and is_gp_reg(sib_op.mem.index)
+            and settings.cGpRegistersParam.checked
+            and sib_op.mem.index in settings.gp_regs
+        ):
             i = 1
 
         # i, j means the same things as for Mod R/M
@@ -144,25 +163,41 @@ class OperandParameterizer:
 
         rm_op = self.locator.locate(OPERAND_MODRM_RM)
 
-        if rm_op and self.modrm.is_mem_with_rm_base_reg_and_disp() and is_gp_reg(
-                rm_op.mem.base) and settings.cGpDisplacementParam.checked:
+        if (
+            rm_op
+            and self.modrm.is_mem_with_rm_base_reg_and_disp()
+            and is_gp_reg(rm_op.mem.base)
+            and settings.cGpDisplacementParam.checked
+        ):
             dbg_print("parameterize_disp(): rm_base_reg_and_disp + gp_reg")
             return self.disp.parameterize_default(settings)
 
-        if rm_op and self.modrm.is_mem_with_rm_base_reg_and_disp() and is_stack_reg(
-                rm_op.mem.base) and settings.cSDisplacementParam.checked:
+        if (
+            rm_op
+            and self.modrm.is_mem_with_rm_base_reg_and_disp()
+            and is_stack_reg(rm_op.mem.base)
+            and settings.cSDisplacementParam.checked
+        ):
             dbg_print("parameterize_disp(): rm_base_reg_and_disp + sp_reg")
             return self.disp.parameterize_default(settings)
 
         sib_op = self.locator.locate(OPERAND_SIB)
 
-        if sib_op and self.modrm.is_mem_with_sib_and_disp() and is_gp_reg(
-                sib_op.mem.base) and settings.cGpDisplacementParam.checked:
+        if (
+            sib_op
+            and self.modrm.is_mem_with_sib_and_disp()
+            and is_gp_reg(sib_op.mem.base)
+            and settings.cGpDisplacementParam.checked
+        ):
             dbg_print("parameterize_disp(): sib_and_disp + gp_reg")
             return self.disp.parameterize_default(settings)
 
-        if sib_op and self.modrm.is_mem_with_sib_and_disp() and is_stack_reg(
-                sib_op.mem.base) and settings.cSDisplacementParam.checked:
+        if (
+            sib_op
+            and self.modrm.is_mem_with_sib_and_disp()
+            and is_stack_reg(sib_op.mem.base)
+            and settings.cSDisplacementParam.checked
+        ):
             dbg_print("parameterize_disp(): sib_and_disp + sp_reg")
             return self.disp.parameterize_default(settings)
 
@@ -180,7 +215,7 @@ class OperandParameterizer:
                 dbg_print("parameterize_disp(): only_disp_rip_rel (offset)")
                 return self.disp.parameterize_offset(settings)
 
-        return hexlify(self._instr.bytes[disp_off: disp_off + disp_size]).decode('utf-8').upper()
+        return hexlify(self._instr.bytes[disp_off : disp_off + disp_size]).decode("utf-8").upper()
 
     def parameterize_imm(self, settings: SettingsDialog):
         """
@@ -191,7 +226,7 @@ class OperandParameterizer:
 
         imm_offset = self._instr.imm_offset
         imm_size = self._instr.imm_size
-        imm_data = self._instr.bytes[imm_offset: imm_offset + imm_size]
+        imm_data = self._instr.bytes[imm_offset : imm_offset + imm_size]
 
         imm_op = self.locator.locate(OPERAND_IMM)
 
@@ -219,10 +254,7 @@ class OperandParameterizer:
         if reg_op and is_gp_reg(reg_op.reg) and settings.cGpImmParam.checked:
             return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * imm_size
 
-        code_refs = list(idautils.CodeRefsTo(imm, 1))
-        data_refs = list(idautils.DataRefsTo(imm))
-
-        if code_refs or data_refs:
+        if has_xrefs_to(self._db, imm):
             if settings.address_parameterization_mode == 0:
                 return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * imm_size
 
@@ -230,7 +262,10 @@ class OperandParameterizer:
                 return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * (imm_size - 1) + f"{imm_data[-1]:02X}"
 
             if settings.address_parameterization_mode == 2:
-                return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * (imm_size - 2) + f"{imm_data[-2]:02X}" + \
-                       f"{imm_data[-1]:02X}"
+                return (
+                    f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * (imm_size - 2)
+                    + f"{imm_data[-2]:02X}"
+                    + f"{imm_data[-1]:02X}"
+                )
 
-        return hexlify(self._instr.bytes[imm_offset: imm_offset + imm_size]).decode('utf-8').upper()
+        return hexlify(self._instr.bytes[imm_offset : imm_offset + imm_size]).decode("utf-8").upper()

@@ -13,6 +13,7 @@ OPERAND_DISP = 4
 
 class OperandLocator:
     """Map capstone operands to raw operands"""
+
     def __init__(self, instr, modrm: ModRm, sib: Sib, disp: Displacement):
         self._instr = instr
 
@@ -34,7 +35,6 @@ class OperandLocator:
 
             if self._modrm and self._modrm.is_only_reg() and not self.locate(OPERAND_MODRM_RM):
                 if operand.type == X86_OP_REG:
-
                     modrm_reg = get_reg(self._modrm.rm_id, get_reg_size(operand.reg), instr)
 
                     if operand.reg == modrm_reg:
@@ -42,9 +42,12 @@ class OperandLocator:
                         self._mapping[OPERAND_MODRM_RM] = operand
                         continue
 
-            if self._modrm and self._modrm.is_mem_with_rm_base_reg() and not self.locate(OPERAND_MODRM_RM) \
-                    and get_reg_size(operand.mem.base):
-
+            if (
+                self._modrm
+                and self._modrm.is_mem_with_rm_base_reg()
+                and not self.locate(OPERAND_MODRM_RM)
+                and get_reg_size(operand.mem.base)
+            ):
                 if operand.type == X86_OP_MEM:
                     modrm_reg = get_reg(self._modrm.rm_id, get_reg_size(operand.mem.base), instr)
 
@@ -53,8 +56,12 @@ class OperandLocator:
                         self._mapping[OPERAND_MODRM_RM] = operand
                         continue
 
-            if self._modrm and self._modrm.is_mem_with_sib() and not self.locate(OPERAND_SIB)\
-                    and self._sib.is_mem_with_base_reg():
+            if (
+                self._modrm
+                and self._modrm.is_mem_with_sib()
+                and not self.locate(OPERAND_SIB)
+                and self._sib.is_mem_with_base_reg()
+            ):
                 sib_base_reg = get_reg(self._sib.base_id, get_bitness(), instr)
 
                 if operand.type == X86_OP_MEM and operand.mem.base == sib_base_reg:
@@ -63,9 +70,12 @@ class OperandLocator:
                     self._mapping[OPERAND_SIB] = operand
                     continue
 
-            if self._modrm and self._modrm.is_mem_with_sib() and not self.locate(OPERAND_SIB) \
-                    and self._sib.is_mem_with_only_index_disp_32():
-
+            if (
+                self._modrm
+                and self._modrm.is_mem_with_sib()
+                and not self.locate(OPERAND_SIB)
+                and self._sib.is_mem_with_only_index_disp_32()
+            ):
                 sib_index_reg = get_reg(self._sib.index_id, get_bitness(), instr)
 
                 if operand.type == X86_OP_MEM and operand.mem.index == sib_index_reg:
@@ -74,8 +84,13 @@ class OperandLocator:
                     self._mapping[OPERAND_SIB] = operand
                     continue
 
-            if not self._modrm and not self._sib and self._disp and operand.type == X86_OP_MEM and \
-                    self._disp.disp == operand.mem.disp:
+            if (
+                not self._modrm
+                and not self._sib
+                and self._disp
+                and operand.type == X86_OP_MEM
+                and self._disp.disp == operand.mem.disp
+            ):
                 dbg_print("not _modrm + not _sib (only disp) -> OPERAND_DISP")
                 self._mapping[OPERAND_DISP] = operand
                 continue
@@ -86,7 +101,6 @@ class OperandLocator:
                 continue
 
             if self._modrm and operand.type == X86_OP_REG and get_reg_size(operand.reg):
-
                 modreg_reg = get_reg(self._modrm.reg_id, get_reg_size(operand.reg), instr)
 
                 if operand.reg == modreg_reg and not self.locate(OPERAND_MODRM_REG):
