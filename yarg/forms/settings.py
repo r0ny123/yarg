@@ -337,20 +337,14 @@ class SettingsDialog:
             widget.setChecked(state)
 
     def _apply_gp_master(self, enabled):
-        self.cGpRegistersParam.checked = bool(enabled)
-        self.is_gp_enabled = bool(enabled)
         for control in self.gp_chk_regs:
-            control.checked = bool(enabled)
             widget = self._checkbox_widgets.get(id(control))
             if widget is not None:
                 widget.setEnabled(bool(enabled))
                 widget.setChecked(bool(enabled))
 
     def _apply_sp_master(self, enabled):
-        self.cSRegistersParam.checked = bool(enabled)
-        self.is_sp_enabled = bool(enabled)
         for control in self.sp_chk_regs:
-            control.checked = bool(enabled)
             widget = self._checkbox_widgets.get(id(control))
             if widget is not None:
                 widget.setEnabled(bool(enabled))
@@ -363,6 +357,8 @@ class SettingsDialog:
                 control.checked = widget.isChecked()
         self.address_parameterization_mode = self._checked_button_index(self._address_buttons)
         self.offset_parameterization_mode = self._checked_button_index(self._offset_buttons)
+        self.is_gp_enabled = self.cGpRegistersParam.checked
+        self.is_sp_enabled = self.cSRegistersParam.checked
         self.gp_regs = []
         self.sp_regs = []
         for control, regs, callback in self._register_groups():

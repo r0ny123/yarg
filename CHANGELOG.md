@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-06-08
+
+### Added
+- Added regression coverage for IDA 9 settings dialog state handling, generated YARA rule viewer tabs, `ida_domain` lifecycle cleanup, plugin reload cleanup, and 64-bit-safe YARA rule/string naming.
+
+### Changed
+- Made generated YARA rule viewer tabs transient and uniquely named so repeated generation from any action opens a new IDA tab instead of reusing a persistent `Created YARA rule` tab.
+- Centralized YARA rule and string address formatting so selected instruction, selected range, selected basic block, and function outputs consistently use 16-digit addresses for 64-bit databases.
+- Lazy-load `ida_domain` bindings in the bridge to keep command-line tests free of IDAPython SWIG import warnings until IDA database access is actually needed.
+
+### Fixed
+- Fixed settings dialog state leakage where toggling GP or SP/BP master checkboxes could mutate saved settings even when the dialog was canceled.
+- Fixed live IDA GUI cleanup to avoid calling `ida_domain.Database.close()`, preventing Diaphora's `Close is available only when running as a library` console error after rule generation.
+- Fixed plugin reload/unload cleanup so stale YarG UI hooks and registered actions are removed before local re-registration, preventing duplicate popup actions after iterative reloads.
+- Fixed partial action-registration rollback so a failed registration does not leave already-registered YarG actions behind.
+
 ## [1.0.0] - 2026-06-07
 
 ### Added

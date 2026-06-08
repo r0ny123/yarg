@@ -121,6 +121,14 @@ def build_yara_rule(rule_name: str, patterns: Sequence[YaraBytePattern], conditi
     return formatted
 
 
+def address_width_for_bitness(bitness: int) -> int:
+    return 16 if bitness == 64 else 8
+
+
+def format_rule_address(ea: int, bitness: int) -> str:
+    return f"{ea:0{address_width_for_bitness(bitness)}X}"
+
+
 def build_code_rule(
     rule_ea: int,
     pattern: str,
@@ -130,13 +138,13 @@ def build_code_rule(
     rule_kind: str,
     rule_end_ea: int | None = None,
 ) -> str:
-    address_width = 16 if bitness == 64 else 8
-    string_name = f"{var_prefix}{rule_ea:0{address_width}X}"
+    formatted_start = format_rule_address(rule_ea, bitness)
+    string_name = f"{var_prefix}{formatted_start}"
     safe_kind = sanitize_identifier(rule_kind, "code")
-    rule_name = f"generate_rule_{safe_kind}_{rule_ea:0{address_width}X}"
+    rule_name = f"generate_rule_{safe_kind}_{formatted_start}"
 
     if rule_end_ea is not None:
-        rule_name = f"{rule_name}_{rule_end_ea:0{address_width}X}"
+        rule_name = f"{rule_name}_{format_rule_address(rule_end_ea, bitness)}"
 
     return build_yara_rule(
         rule_name,
@@ -151,14 +159,13 @@ def build_function_rule(
     bitness: int,
     var_prefix: str,
 ) -> str:
-    address_width = 16 if bitness == 64 else 8
     patterns = [
-        YaraBytePattern(f"{var_prefix}{block_ea:0{address_width}X}", pattern, annotations)
+        YaraBytePattern(f"{var_prefix}{format_rule_address(block_ea, bitness)}", pattern, annotations)
         for block_ea, pattern, annotations in block_patterns
     ]
 
     half_plus_one = (len(patterns) // 2) + 1
     condition = f"{half_plus_one + half_plus_one // 2} of (${sanitize_identifier(var_prefix, 'code_at')}*)"
-    rule_name = f"generate_rule_fn_{rule_ea:0{address_width}X}"
+    rule_name = f"generate_rule_fn_{format_rule_address(rule_ea, bitness)}"
 
     return build_yara_rule(rule_name, patterns, condition)

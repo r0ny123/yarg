@@ -1,4 +1,5 @@
-from yarg.ida_domain_bridge import has_xrefs_to
+from yarg import ida_domain_bridge
+from yarg.ida_domain_bridge import current_database, has_xrefs_to
 
 
 class FakeXrefs:
@@ -29,6 +30,26 @@ class FakeDb:
         self.xrefs = xrefs
 
 
+class FakeDatabaseHandle:
+    def __init__(self):
+        self.closed = False
+        self.unhooked = False
+
+    def close(self):
+        self.closed = True
+
+    def unhook(self):
+        self.unhooked = True
+
+
+class FakeDatabaseFactory:
+    def __init__(self, db):
+        self.db = db
+
+    def open(self):
+        return self.db
+
+
 def test_has_xrefs_to_uses_ida_domain_to_ea_api():
     xrefs = FakeXrefs(values=[object()])
 
@@ -47,3 +68,27 @@ def test_has_xrefs_to_returns_false_for_invalid_or_missing_api():
     assert has_xrefs_to(None, 0x401000) is False
     assert has_xrefs_to(FakeDb(object()), 0x401000) is False
     assert has_xrefs_to(FakeDb(FakeXrefs(raises=True)), 0x401000) is False
+
+
+def test_current_database_unhooks_in_ida_gui_mode(monkeypatch):
+    db = FakeDatabaseHandle()
+    monkeypatch.setattr(ida_domain_bridge, "Database", FakeDatabaseFactory(db))
+    monkeypatch.setattr(ida_domain_bridge, "_is_ida_library_mode", lambda: False)
+
+    with current_database() as opened:
+        assert opened is db
+
+    assert db.closed is False
+    assert db.unhooked is True
+
+
+def test_current_database_closes_in_ida_library_mode(monkeypatch):
+    db = FakeDatabaseHandle()
+    monkeypatch.setattr(ida_domain_bridge, "Database", FakeDatabaseFactory(db))
+    monkeypatch.setattr(ida_domain_bridge, "_is_ida_library_mode", lambda: True)
+
+    with current_database() as opened:
+        assert opened is db
+
+    assert db.closed is True
+    assert db.unhooked is False

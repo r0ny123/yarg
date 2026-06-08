@@ -4,6 +4,7 @@ from PySide6 import QtGui, QtWidgets
 
 
 _open_viewers = []
+_next_viewer_id = 1
 
 
 class YaraRuleViewer(kw.PluginForm):
@@ -32,6 +33,14 @@ class YaraRuleViewer(kw.PluginForm):
 
 
 def show_yara_rule(title: str, rule_text: str) -> None:
+    title = _next_viewer_title(title)
     viewer = YaraRuleViewer(rule_text)
     _open_viewers.append(viewer)
-    viewer.Show(title, kw.PluginForm.WOPN_DP_TAB | kw.PluginForm.WOPN_RESTORE | kw.PluginForm.WOPN_PERSIST)
+    viewer.Show(title, kw.PluginForm.WOPN_DP_TAB)
+
+
+def _next_viewer_title(title: str) -> str:
+    global _next_viewer_id
+    viewer_id = _next_viewer_id
+    _next_viewer_id += 1
+    return f"{title} #{viewer_id}"

@@ -10,6 +10,7 @@ from .create_from_single_instr import CreatePatternFromSelectedInstructionHandle
 
 
 POPUP_PATH = "YarG for Yara/"
+ACTION_PREFIX = "YargForYara:"
 
 
 @dataclass(frozen=True)
@@ -45,22 +46,31 @@ class Hooks(kw.UI_Hooks):
 class ActionsManager:
     def __init__(self):
         self._actions: list[kw.action_desc_t] = []
+        self._action_names: list[str] = []
+        self._handlers: list[kw.action_handler_t] = []
 
     @property
     def actions(self) -> tuple[kw.action_desc_t, ...]:
         return tuple(self._actions)
 
     def register_defaults(self) -> bool:
-        return all(self.register(spec) for spec in DEFAULT_ACTIONS)
+        for spec in DEFAULT_ACTIONS:
+            if not self.register(spec):
+                self.unregister_all()
+                return False
+        return True
 
     def register(self, spec: ActionSpec) -> bool:
         icon = -1
         if spec.icon_path:
             icon = kw.load_custom_icon(spec.icon_path)
+        action_name = self.action_name(spec)
+        kw.unregister_action(action_name)
+        handler = spec.handler()
         action_desc = kw.action_desc_t(
-            f"YargForYara:{spec.handler.__name__}",
+            action_name,
             spec.text,
-            spec.handler(),
+            handler,
             spec.shortcut,
             spec.tooltip,
             icon,
@@ -68,9 +78,17 @@ class ActionsManager:
         if not kw.register_action(action_desc):
             return False
         self._actions.append(action_desc)
+        self._action_names.append(action_name)
+        self._handlers.append(handler)
         return True
 
     def unregister_all(self) -> None:
-        for action_desc in reversed(self._actions):
-            kw.unregister_action(action_desc.name)
+        for action_name in reversed(self._action_names):
+            kw.unregister_action(action_name)
         self._actions.clear()
+        self._action_names.clear()
+        self._handlers.clear()
+
+    @staticmethod
+    def action_name(spec: ActionSpec) -> str:
+        return f"{ACTION_PREFIX}{spec.handler.__name__}"

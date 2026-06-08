@@ -74,6 +74,16 @@ def test_selected_instruction_rule_is_complete_and_uses_single_string_condition(
     yara_x.compile(rule)
 
 
+@pytest.mark.parametrize("rule_kind", ["instr", "bb"])
+def test_single_address_code_rules_use_full_64_bit_address_names(rule_kind):
+    rule = build_code_rule(0x140001000, "C3", ANNOTATIONS, 64, "code_at_", rule_kind)
+
+    assert f"rule generate_rule_{rule_kind}_0000000140001000" in rule
+    assert "$code_at_0000000140001000 = { C3 }" in rule
+    assert "$code_at_40001000" not in rule
+    yara_x.compile(rule)
+
+
 def test_selected_range_rule_is_complete_not_raw_variable_only():
     rule = build_code_rule(0x401000, "558BEC", ANNOTATIONS, 32, "code_at_", "range", rule_end_ea=0x401006)
 
@@ -82,6 +92,23 @@ def test_selected_range_rule_is_complete_not_raw_variable_only():
     assert "condition:" in rule
     assert "$code_at_00401000 = { 55 8B EC }" in rule
     assert rule.strip().endswith("}")
+    yara_x.compile(rule)
+
+
+def test_selected_range_rule_uses_full_64_bit_start_and_end_names():
+    rule = build_code_rule(
+        0x140001000,
+        "558BEC",
+        ANNOTATIONS,
+        64,
+        "code_at_",
+        "range",
+        rule_end_ea=0x140001006,
+    )
+
+    assert "rule generate_rule_range_0000000140001000_0000000140001006" in rule
+    assert "$code_at_0000000140001000 = { 55 8B EC }" in rule
+    assert "$code_at_40001000" not in rule
     yara_x.compile(rule)
 
 
@@ -121,6 +148,23 @@ def test_function_rule_uses_64_bit_addresses():
     assert "rule generate_rule_fn_0000000140001000" in rule
     assert "$code_at_0000000140001000" in rule
     assert "1 of ($code_at_*)" in rule
+    yara_x.compile(rule)
+
+
+def test_function_rule_keeps_distinct_64_bit_block_string_names():
+    rule = build_function_rule(
+        0x140001000,
+        [
+            (0x140001000, "C3", [YaraInstructionComment(0x140001000, "c3", "ret")]),
+            (0x240001000, "90", [YaraInstructionComment(0x240001000, "90", "nop")]),
+        ],
+        64,
+        "code_at_",
+    )
+
+    assert "$code_at_0000000140001000" in rule
+    assert "$code_at_0000000240001000" in rule
+    assert "$code_at_40001000" not in rule
     yara_x.compile(rule)
 
 

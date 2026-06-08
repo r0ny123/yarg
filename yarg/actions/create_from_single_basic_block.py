@@ -67,7 +67,7 @@ class CreatePatternFromSelectedBasicBlockHandler(kw.action_handler_t):
             kw.warning(f"[YarG] {exc}")
             return 0
 
-        show_yara_rule("Created YARA rule", yar_rule)
+        show_yara_rule(f"YarG basic block {bb.start_ea:0{bitness // 4}X}", yar_rule)
         return 0
 
     def update(self, ctx):
