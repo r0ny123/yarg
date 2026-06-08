@@ -83,6 +83,12 @@ class YaraBuilder(ida_idaapi.plugin_t):
         if self._actions_manager is not None:
             self._actions_manager.unregister_all()
             self._actions_manager = None
+        try:
+            from yarg.rule_viewer import close_all_viewers
+
+            close_all_viewers()
+        except Exception:
+            pass
         if getattr(kw, YARG_CLEANUP_ATTR, None) is self._cleanup_handle:
             delattr(kw, YARG_CLEANUP_ATTR)
         self._cleanup_handle = None

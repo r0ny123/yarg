@@ -27,7 +27,7 @@ def _is_ida_library_mode() -> bool:
         import ida_kernwin as imported_ida_kernwin
 
         ida_kernwin = imported_ida_kernwin
-    except ModuleNotFoundError:
+    except ImportError:
         try:
             from ida_domain import database as ida_database
 

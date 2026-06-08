@@ -122,9 +122,11 @@ def build_yara_rule(rule_name: str, patterns: Sequence[YaraBytePattern], conditi
     validate_yara_source(source)
 
     formatted = format_yara_source(source)
-    validate_yara_source(formatted)
-
-    return formatted
+    try:
+        validate_yara_source(formatted)
+        return formatted
+    except YaraOutputError:
+        return source
 
 
 def address_width_for_bitness(bitness: int) -> int:

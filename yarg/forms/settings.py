@@ -153,9 +153,15 @@ class SettingsDialog:
         self._apply_sp_master(self.cSRegistersParam.checked)
 
         if dialog.exec() != QtWidgets.QDialog.Accepted:
+            self._checkbox_widgets.clear()
+            self._address_buttons = []
+            self._offset_buttons = []
             return 0
 
         self._sync_from_widgets()
+        self._checkbox_widgets.clear()
+        self._address_buttons = []
+        self._offset_buttons = []
         return 1
 
     def set_default_check_box_values(self):

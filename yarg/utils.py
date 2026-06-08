@@ -159,7 +159,7 @@ def is_stack_reg(r) -> bool:
 
 
 def is_gp_reg(r) -> bool:
-    return not is_stack_reg(r)
+    return r != 0 and not is_stack_reg(r)
 
 
 def get_bitness() -> int:

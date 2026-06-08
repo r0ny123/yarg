@@ -15,6 +15,8 @@ class YaraRuleViewer(kw.PluginForm):
 
     def OnCreate(self, form):
         self._parent = self.FormToPyQtWidget(form)
+        if self._parent is None:
+            return
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(6, 6, 6, 6)
         editor = QtWidgets.QPlainTextEdit()
@@ -30,6 +32,16 @@ class YaraRuleViewer(kw.PluginForm):
             _open_viewers.remove(self)
         except ValueError:
             pass
+        self._parent = None
+
+
+def close_all_viewers() -> None:
+    for viewer in list(_open_viewers):
+        try:
+            viewer.Close()
+        except Exception:
+            pass
+    _open_viewers.clear()
 
 
 def show_yara_rule(title: str, rule_text: str) -> None:

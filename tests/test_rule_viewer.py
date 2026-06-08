@@ -44,3 +44,14 @@ def test_yara_rule_viewer_uses_unique_non_persistent_tabs(monkeypatch):
     assert second.shown_options == _PluginForm.WOPN_DP_TAB
     assert not first.shown_options & _PluginForm.WOPN_RESTORE
     assert not first.shown_options & _PluginForm.WOPN_PERSIST
+
+
+def test_yara_rule_viewer_on_close_removes_from_open_viewers(monkeypatch):
+    rule_viewer = _load_rule_viewer(monkeypatch)
+
+    rule_viewer.show_yara_rule("Test Rule", "rule test {}")
+    assert len(rule_viewer._open_viewers) == 1
+    viewer = rule_viewer._open_viewers[0]
+    viewer.OnClose(None)
+    assert len(rule_viewer._open_viewers) == 0
+    assert viewer._parent is None

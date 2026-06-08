@@ -215,6 +215,10 @@ class OperandParameterizer:
                 dbg_print("parameterize_disp(): only_disp_rip_rel (offset)")
                 return self.disp.parameterize_offset(settings)
 
+        if sib_op and self.sib and self.sib.is_mem_without_base_reg():
+            dbg_print("parameterize_disp(): sib_without_base (address)")
+            return self.disp.parameterize_address(settings)
+
         return hexlify(self._instr.bytes[disp_off : disp_off + disp_size]).decode("utf-8").upper()
 
     def parameterize_imm(self, settings: SettingsDialog):
@@ -259,9 +263,13 @@ class OperandParameterizer:
                 return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * imm_size
 
             if settings.address_parameterization_mode == 1:
+                if imm_size < 1:
+                    return ""
                 return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * (imm_size - 1) + f"{imm_data[-1]:02X}"
 
             if settings.address_parameterization_mode == 2:
+                if imm_size < 2:
+                    return f"{imm_data[-1]:02X}" if imm_size == 1 else ""
                 return (
                     f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * (imm_size - 2)
                     + f"{imm_data[-2]:02X}"
