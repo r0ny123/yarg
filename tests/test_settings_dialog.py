@@ -177,3 +177,40 @@ def test_accepted_master_toggle_is_synced_into_settings(monkeypatch):
     assert dialog.is_gp_enabled is False
     assert dialog.gp_regs == []
     assert all(not control.checked for control in dialog.gp_chk_regs)
+
+
+def test_cancelled_sp_master_toggle_does_not_leak_into_settings(monkeypatch):
+    settings_module = _load_settings_module(monkeypatch)
+    dialog = settings_module.SettingsDialog()
+    dialog.set_default_check_box_values()
+    original_sp_regs = list(dialog.sp_regs)
+
+    def toggle_sp_master():
+        dialog._checkbox_widgets[id(dialog.cSRegistersParam)].setChecked(True)
+
+    _QDialog.on_exec = toggle_sp_master
+    _QDialog.next_result = _QDialog.Rejected
+
+    assert dialog.Execute() == 0
+    assert dialog.cSRegistersParam.checked is False
+    assert dialog.is_sp_enabled is False
+    assert dialog.sp_regs == original_sp_regs
+    assert all(not control.checked for control in dialog.sp_chk_regs)
+
+
+def test_accepted_sp_master_toggle_is_synced_into_settings(monkeypatch):
+    settings_module = _load_settings_module(monkeypatch)
+    dialog = settings_module.SettingsDialog()
+    dialog.set_default_check_box_values()
+
+    def toggle_sp_master():
+        dialog._checkbox_widgets[id(dialog.cSRegistersParam)].setChecked(True)
+
+    _QDialog.on_exec = toggle_sp_master
+    _QDialog.next_result = _QDialog.Accepted
+
+    assert dialog.Execute() == 1
+    assert dialog.cSRegistersParam.checked is True
+    assert dialog.is_sp_enabled is True
+    assert len(dialog.sp_regs) > 0
+    assert all(control.checked for control in dialog.sp_chk_regs)

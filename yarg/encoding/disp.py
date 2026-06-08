@@ -32,9 +32,13 @@ class Displacement:
             return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * self.size
 
         if settings.address_parameterization_mode == 1:
+            if self.size < 1:
+                return ""
             return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * (self.size - 1) + f"{self.data[-1]:02X}"
 
         if settings.address_parameterization_mode == 2:
+            if self.size < 2:
+                return f"{self.data[-1]:02X}" if self.size == 1 else ""
             return (
                 f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * (self.size - 2)
                 + f"{self.data[-2]:02X}"
@@ -46,9 +50,13 @@ class Displacement:
             return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * self.size
 
         if settings.offset_parameterization_mode == 1:
+            if self.size < 1:
+                return ""
             return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * (self.size - 1) + f"{self.data[-1]:02X}"
 
         if settings.offset_parameterization_mode == 2:
+            if self.size < 2:
+                return f"{self.data[-1]:02X}" if self.size == 1 else ""
             return (
                 f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}" * (self.size - 2)
                 + f"{self.data[-2]:02X}"

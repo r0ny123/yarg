@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-06-08
+
+### Added
+- Added comprehensive unit tests for instruction encoding (ModR/M, SIB, Displacement) and operand locator logic.
+- Added new test cases for `ida_domain_bridge` to verify function resolution and basic block iteration.
+
+### Changed
+- Refactored actions' `update` widget type checks to enable for both `BWN_DISASM` and `BWN_DISASM_ARROWS`.
+- Modified action handlers' `activate` to return `1` on success instead of `0`.
+- Broadened exception handling in `_is_ida_library_mode` to catch all `ImportError` subclasses.
+
+### Fixed
+- Fixed memory leakage in the settings dialog and rule viewer by clearing widget references on dialog rejection/acceptance and view close.
+- Fixed SIB base R13 register decoding under REX.B prefix by checking base ID 13.
+- Fixed locator register size matching by dynamically resolving base/index register sizes instead of using global bitness.
+- Fixed crash risk (IndexError) in displacement and immediate parameterization when size is less than 2 under keep-last-2-bytes mode.
+- Fixed fallthrough bug in displacement parameterization for SIB without base register by correctly mapping it as an absolute address.
+- Fixed `is_gp_reg(0)` to correctly return `False` instead of `True` for invalid registers.
+- Fixed format validation failures halting entire rule generation by falling back to verified unformatted YARA rules.
+
 ## [1.0.1] - 2026-06-08
 
 ### Added

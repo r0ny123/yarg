@@ -60,10 +60,7 @@ class Sib:
         return self.index_id != 4
 
     def is_mem_with_only_index_disp_32(self):
-        return self.is_mem_with_index() and self.mod == 0 and self.base_id == 5
-
-    def is_mem_without_base_reg_and_with_disp32_index_scale(self):
-        return self.is_mem_without_base_reg() and self.index_id != 4
+        return self.is_mem_with_index() and self.is_mem_without_base_reg()
 
     def is_mem_with_base_only(self):
         return self.mod == 0 and self.base_id not in (5, 13) and self.index_id == 4

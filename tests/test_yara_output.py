@@ -176,3 +176,40 @@ def test_validation_error_reports_yara_x_compile_failure():
 def test_identifier_sanitization_never_returns_invalid_empty_identifier():
     assert sanitize_identifier("!!!", "fallback") == "fallback"
     assert sanitize_identifier("123 name", "fallback") == "_123_name"
+
+
+def test_build_yara_rule_falls_back_when_formatter_is_missing(monkeypatch):
+    monkeypatch.setattr(yara_x, "Formatter", None)
+    rule = build_yara_rule("test_rule", [YaraBytePattern("$str", "558BEC", ANNOTATIONS)], "$str")
+    assert "rule test_rule" in rule
+    assert "$str = { 558BEC }" in rule or "$str = { 55 8B EC }" in rule
+    yara_x.compile(rule)
+
+
+def test_build_yara_rule_falls_back_when_formatter_raises_exception(monkeypatch):
+    class BadFormatter:
+        def format(self, *args, **kwargs):
+            raise ValueError("Formatting failed")
+
+    monkeypatch.setattr(yara_x, "Formatter", BadFormatter)
+    rule = build_yara_rule("test_rule", [YaraBytePattern("$str", "558BEC", ANNOTATIONS)], "$str")
+    assert "rule test_rule" in rule
+    yara_x.compile(rule)
+
+
+def test_function_rule_threshold_caps_correctly_for_single_block():
+    rule = build_function_rule(
+        0x401000,
+        [(0x401000, "558BEC", ANNOTATIONS)],
+        32,
+        "code_at_",
+    )
+    assert "1 of ($code_at_*)" in rule
+
+
+def test_function_rule_threshold_caps_correctly_for_five_blocks():
+    # 5 blocks: half_plus_one = (5 // 2) + 1 = 3
+    # required = min(3 + 3 // 2, 5) = min(4, 5) = 4
+    blocks = [(0x401000 + i * 0x10, "90", [YaraInstructionComment(0x401000 + i * 0x10, "90", "nop")]) for i in range(5)]
+    rule = build_function_rule(0x401000, blocks, 32, "code_at_")
+    assert "4 of ($code_at_*)" in rule

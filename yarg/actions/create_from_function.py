@@ -57,9 +57,9 @@ class CreatePatternFromFunctionHandler(kw.action_handler_t):
             return 0
 
         show_yara_rule(f"YarG function {ea:0{bitness // 4}X}", yar_rule)
-        return 0
+        return 1
 
     def update(self, ctx):
-        if ctx.widget_type == kw.BWN_DISASM:
+        if ctx.widget_type in (kw.BWN_DISASM, kw.BWN_DISASM_ARROWS):
             return kw.AST_ENABLE_FOR_WIDGET
         return kw.AST_DISABLE_FOR_WIDGET
