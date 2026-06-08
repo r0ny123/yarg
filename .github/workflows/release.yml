@@ -62,6 +62,23 @@ jobs:
           (cd package && zip -r "../dist/${ARCHIVE}" .)
           unzip -l "dist/${{ steps.metadata.outputs.archive }}"
 
+      - name: Extract changelog notes
+        shell: bash
+        run: |
+          python -c '
+          import re
+          from pathlib import Path
+          content = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          version = "${{ steps.metadata.outputs.version }}"
+          pattern = rf"(?s)##\s+\[{re.escape(version)}\].*?(?=\n##\s+\[|\Z)"
+          match = re.search(pattern, content)
+          if match:
+              lines = match.group(0).splitlines()
+              Path("dist/release_notes.md").write_text("\n".join(lines[1:]).strip(), encoding="utf-8")
+          else:
+              Path("dist/release_notes.md").write_text("Release v" + version, encoding="utf-8")
+          '
+
       - name: Install HCLI
         run: |
           curl -LsSf https://hcli.docs.hex-rays.com/install | sh
@@ -77,9 +94,8 @@ jobs:
           allowUpdates: true
           artifacts: "dist/${{ steps.metadata.outputs.archive }}"
           artifactErrorsFailBuild: true
-          generateReleaseNotes: true
+          bodyFile: "dist/release_notes.md"
           makeLatest: true
           name: ${{ steps.metadata.outputs.tag }}
-          omitBodyDuringUpdate: true
           replacesArtifacts: true
           tag: ${{ steps.metadata.outputs.tag }}
