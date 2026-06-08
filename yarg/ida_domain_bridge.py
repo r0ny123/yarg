@@ -40,7 +40,7 @@ def _is_ida_library_mode() -> bool:
         return False
 
     try:
-        return bool(is_ida_library(None, 0, None))
+        return bool(is_ida_library())
     except Exception:
         return False
 

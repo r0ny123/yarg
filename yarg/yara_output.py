@@ -99,9 +99,15 @@ def render_rule_source(rule_name: str, patterns: Sequence[YaraBytePattern], cond
 
 
 def format_yara_source(source: str) -> str:
-    output = io.StringIO()
-    yara_x.Formatter().format(io.StringIO(source), output)
-    return output.getvalue()
+    try:
+        formatter_cls = getattr(yara_x, "Formatter", None)
+        if formatter_cls is None:
+            return source
+        output = io.StringIO()
+        formatter_cls().format(io.StringIO(source), output)
+        return output.getvalue()
+    except Exception:
+        return source
 
 
 def validate_yara_source(source: str) -> None:
@@ -165,7 +171,8 @@ def build_function_rule(
     ]
 
     half_plus_one = (len(patterns) // 2) + 1
-    condition = f"{half_plus_one + half_plus_one // 2} of (${sanitize_identifier(var_prefix, 'code_at')}*)"
+    required = min(half_plus_one + half_plus_one // 2, len(patterns))
+    condition = f"{required} of (${sanitize_identifier(var_prefix, 'code_at')}*)"
     rule_name = f"generate_rule_fn_{format_rule_address(rule_ea, bitness)}"
 
     return build_yara_rule(rule_name, patterns, condition)

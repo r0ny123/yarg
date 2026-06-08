@@ -133,7 +133,7 @@ def test_function_rule_uses_32_bit_addresses_and_threshold_condition():
     assert "rule generate_rule_fn_00401000" in rule
     assert "$code_at_00401000" in rule
     assert "$code_at_00401010" in rule
-    assert "3 of ($code_at_*)" in rule
+    assert "2 of ($code_at_*)" in rule
     yara_x.compile(rule)
 
 

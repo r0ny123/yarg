@@ -20,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Fixed live IDA GUI cleanup to avoid calling `ida_domain.Database.close()`, preventing a `Close is available only when running as a library` console error after rule generation.
 - Fixed plugin reload/unload cleanup so stale YarG UI hooks and registered actions are removed before local re-registration, preventing duplicate popup actions after iterative reloads.
 - Fixed partial action-registration rollback so a failed registration does not leave already-registered YarG actions behind.
+- Fixed `_is_ida_library_mode` environment check by calling `is_ida_library()` without arguments, preventing SWIG type mapping exceptions.
+- Fixed function rule generation condition threshold to not exceed the total number of basic blocks for small functions.
+- Added defensive fallback in rule formatting to output unformatted rules if `yara_x.Formatter` is missing or fails.
 
 ## [1.0.0] - 2026-06-07
 
