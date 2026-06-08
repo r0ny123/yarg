@@ -41,7 +41,7 @@ jobs:
 
     - name: Run tests
       run: |
-        pytest
+        python -m pytest
 
     - name: Install HCLI
       if: matrix.python-version == '3.13'
