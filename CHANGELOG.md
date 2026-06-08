@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 - Fixed settings dialog state leakage where toggling GP or SP/BP master checkboxes could mutate saved settings even when the dialog was canceled.
-- Fixed live IDA GUI cleanup to avoid calling `ida_domain.Database.close()`, preventing Diaphora's `Close is available only when running as a library` console error after rule generation.
+- Fixed live IDA GUI cleanup to avoid calling `ida_domain.Database.close()`, preventing a `Close is available only when running as a library` console error after rule generation.
 - Fixed plugin reload/unload cleanup so stale YarG UI hooks and registered actions are removed before local re-registration, preventing duplicate popup actions after iterative reloads.
 - Fixed partial action-registration rollback so a failed registration does not leave already-registered YarG actions behind.
 
