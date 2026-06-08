@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Made generated YARA rule viewer tabs transient and uniquely named so repeated generation from any action opens a new IDA tab instead of reusing a persistent `Created YARA rule` tab.
 - Centralized YARA rule and string address formatting so selected instruction, selected range, selected basic block, and function outputs consistently use 16-digit addresses for 64-bit databases.
 - Lazy-load `ida_domain` bindings in the bridge to keep command-line tests free of IDAPython SWIG import warnings until IDA database access is actually needed.
+- Added a tag-driven GitHub Actions release workflow that builds and uploads an `hcli plugin install`-ready YarG ZIP asset.
 
 ### Fixed
 - Fixed settings dialog state leakage where toggling GP or SP/BP master checkboxes could mutate saved settings even when the dialog was canceled.
@@ -30,7 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Added a new PySide6 custom YARA rule visualization window (`rule_viewer.py`).
 - Added complete YARA rule generation for selected instruction, selected range, selected basic block, and selected function actions.
 - Added assembly comment blocks before generated strings with aligned raw-byte and disassembly columns.
-- Configured automated GitHub Release note generation via `.github/release.yml`.
+- Configured automated GitHub Release note generation.
 
 ### Changed
 - Major refactoring of action registration and lifecycle handling from global module imports to a structured `ActionsManager` and modern UI hooks.

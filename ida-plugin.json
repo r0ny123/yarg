@@ -3,7 +3,7 @@
   "IDAMetadataDescriptorVersion": 1,
   "plugin": {
     "name": "yarg",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "entryPoint": "yarg.py",
     "description": "Yet another rule generator for Yara",
     "license": "MIT",
