@@ -1,8 +1,13 @@
 from dataclasses import dataclass
 
 
-from ..utils import SettingsDialog, generate_8bit_pattern_2_0_any, \
-    generate_8bit_pattern_5_0_any, generate_8bit_pattern_5_3_any, dbg_print
+from ..utils import (
+    SettingsDialog,
+    generate_8bit_pattern_2_0_any,
+    generate_8bit_pattern_5_0_any,
+    generate_8bit_pattern_5_3_any,
+    dbg_print,
+)
 
 
 @dataclass
@@ -15,11 +20,17 @@ class Sib:
     base_ext: int
 
     @classmethod
-    def from_instr(cls, instr, mod, index_ext, base_ext) -> 'Sib':
-        assert (mod != 3)
+    def from_instr(cls, instr, mod, index_ext, base_ext) -> "Sib":
+        assert mod != 3
 
-        return cls(mod=mod, scale=instr.sib >> 6, index=(instr.sib & 0x38) >> 3,
-                   base=instr.sib & 7, index_ext=index_ext, base_ext=base_ext)
+        return cls(
+            mod=mod,
+            scale=instr.sib >> 6,
+            index=(instr.sib & 0x38) >> 3,
+            base=instr.sib & 7,
+            index_ext=index_ext,
+            base_ext=base_ext,
+        )
 
     @property
     def index_id(self):
@@ -81,8 +92,10 @@ class Sib:
     def parameterize(self, rotate_index, rotate_base, settings: SettingsDialog):
         assert 0 <= rotate_index <= 1 and 0 <= rotate_base <= 1
 
-        generators = [[self._gen_cst_scale_index_base_pattern, self._gen_cst_scale_index_pattern],
-                      [self._gen_cst_scale_base_pattern, self._gen_cst_scale_pattern]]
+        generators = [
+            [self._gen_cst_scale_index_base_pattern, self._gen_cst_scale_index_pattern],
+            [self._gen_cst_scale_base_pattern, self._gen_cst_scale_pattern],
+        ]
 
         return generators[rotate_index][rotate_base](settings)
 

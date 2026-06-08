@@ -1,21 +1,40 @@
 # YarG for Yara
 ## Yet another rule generator for Yara
 
-IDAPython plugin for generating whole yara rules/ patterns from x86/x86-64 code. Operation called 'parameterization' 
-applyes to selected code/function. This operation finds alternatives for any possible operands and create pattern 
-based on that information. 
+IDAPython plugin for generating whole YARA rules/patterns from x86/x86-64 code. Operation called 'parameterization'
+applies to selected code/function. This operation finds alternatives for any possible operands and creates a pattern
+based on that information.
 
 Example rule you can found in examples folder.
 
-Tested on IDA 7.5+
+Tested on IDA Pro 9.3+.
 
 ![example gif](examples/example.gif)
 
 ## Installation
 
-Copy plugin to your **IDA_HOME/plugins** folder and install dependencies.
+Install runtime dependencies into the Python environment used by IDA:
+
 ~~~
-    pip install capstone tabulate plyara
+    ~/.idapro/venv/bin/python -m pip install -U -r requirements.txt
+~~~
+
+Copy `yarg.py` and the `yarg/` package to your IDA user plugin folder, typically:
+
+~~~
+    ~/.idapro/plugins
+~~~
+
+YarG uses YARA-X to compile-check, format, and compile-check again before showing generated rules. The selected
+instruction, selected range, selected basic block, and selected function actions all produce complete YARA rules.
+Generated strings include assembly comments with aligned raw-byte and disassembly columns.
+
+## Development
+
+~~~
+    ~/.idapro/venv/bin/python -m pip install -U -r requirements-dev.txt
+    ~/.idapro/venv/bin/python -m compileall -q yarg yarg.py
+    ~/.idapro/venv/bin/python -m pytest
 ~~~
 
 ## How it work ?

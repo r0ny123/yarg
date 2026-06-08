@@ -1,95 +1,94 @@
-from typing import List, Type, Optional
+from dataclasses import dataclass
+from typing import Optional, Type
 
-import idaapi
+import ida_kernwin as kw
 
-
-from .create_from_selection import CreatePatternFromSelectedCodeHandler
 from .create_from_function import CreatePatternFromFunctionHandler
-from .create_from_single_instr import CreatePatternFromSelectedInstructionHandler
+from .create_from_selection import CreatePatternFromSelectedCodeHandler
 from .create_from_single_basic_block import CreatePatternFromSelectedBasicBlockHandler
+from .create_from_single_instr import CreatePatternFromSelectedInstructionHandler
 
 
-class Hooks(idaapi.UI_Hooks):
+POPUP_PATH = "YarG for Yara/"
+ACTION_PREFIX = "YargForYara:"
+
+
+@dataclass(frozen=True)
+class ActionSpec:
+    handler: Type[kw.action_handler_t]
+    text: str
+    shortcut: Optional[str] = None
+    tooltip: Optional[str] = None
+    icon_path: Optional[str] = None
+
+
+DEFAULT_ACTIONS = (
+    ActionSpec(CreatePatternFromSelectedCodeHandler, "Create YARA rule from selected range", "Ctrl+Alt+R"),
+    ActionSpec(CreatePatternFromFunctionHandler, "Create YARA rule from selected function", "Ctrl+Alt+F"),
+    ActionSpec(CreatePatternFromSelectedInstructionHandler, "Create YARA rule from selected instruction", "Ctrl+Alt+I"),
+    ActionSpec(CreatePatternFromSelectedBasicBlockHandler, "Create YARA rule from selected basic block", "Ctrl+Alt+B"),
+)
+
+
+class Hooks(kw.UI_Hooks):
+    def __init__(self, actions_manager):
+        super().__init__()
+        self._actions_manager = actions_manager
+
     def populating_widget_popup(self, widget, popup, ctx):
-        if idaapi.get_widget_type(widget) in (idaapi.BWN_DISASM, idaapi.BWN_DISASM_ARROWS):
-            action: idaapi.action_desc_t = actions_manager.get(ACTION_CreatePatternFromSelectedCodeHandler)
-            idaapi.attach_action_to_popup(widget, popup, action.name, "YarG for Yara/")
+        if kw.get_widget_type(widget) not in (kw.BWN_DISASM, kw.BWN_DISASM_ARROWS):
+            return
 
-            action: idaapi.action_desc_t = actions_manager.get(ACTION_CreatePatternFromFunctionHandler)
-            idaapi.attach_action_to_popup(widget, popup, action.name, "YarG for Yara/")
+        for action_desc in self._actions_manager.actions:
+            kw.attach_action_to_popup(widget, popup, action_desc.name, POPUP_PATH)
 
-            action: idaapi.action_desc_t = actions_manager.get(ACTION_CreatePatternFromSelectedInstructionHandler)
-            idaapi.attach_action_to_popup(widget, popup, action.name, "YarG for Yara/")
-
-            action: idaapi.action_desc_t = actions_manager.get(ACTION_CreatePatternFromSelectedBasicBlockHandler)
-            idaapi.attach_action_to_popup(widget, popup, action.name, "YarG for Yara/")
 
 class ActionsManager:
     def __init__(self):
-        self._actions: List[idaapi.action_desc_t] = []
+        self._actions: list[kw.action_desc_t] = []
+        self._action_names: list[str] = []
+        self._handlers: list[kw.action_handler_t] = []
 
-    def register(self, handler: Type[idaapi.action_handler_t], text, shortcut=None, tooltip=None, ico_path=None) -> int:
-        """
-        Register custom action in IDA
-        :param handler: Implementation of the 'action_handler_t' type
-        :param text: Description of the action
-        :param shortcut: Optional: A string containing shortcut for the action
-        :param tooltip: Optional: Tooltip for the action
-        :param ico_path: Optional: Icon for the action
-        :return: Index (int) of the registered action
-        """
-        ico = -1
-        if ico_path:
-            ico = idaapi.load_custom_icon(ico_path)
+    @property
+    def actions(self) -> tuple[kw.action_desc_t, ...]:
+        return tuple(self._actions)
 
-        action_desc = idaapi.action_desc_t(f"YargForYara:{handler.__name__}", text, handler(), shortcut, tooltip, ico)
-
-        self._actions.append(action_desc)
-
-        idaapi.register_action(action_desc)
-
-        return len(self._actions) - 1
-
-    def unregister(self, index: int) -> bool:
-        """
-        Unregister action in IDA
-        :param index: Index of the registered action
-        :return: Flag (True or False)
-        """
-        if 0 >= index or index >= len(self._actions):
-            return False
-
-        action_desc = self._actions[index]
-
-        idaapi.unregister_action(action_desc.name)
-
+    def register_defaults(self) -> bool:
+        for spec in DEFAULT_ACTIONS:
+            if not self.register(spec):
+                self.unregister_all()
+                return False
         return True
 
-    def get(self, index: int) -> Optional[idaapi.action_desc_t]:
-        """
-        Return registered action by the index
-        :param index: Index (int)
-        :return: Instance of the registered action
-        """
-        if 0 > index or index >= len(self._actions):
-            return None
+    def register(self, spec: ActionSpec) -> bool:
+        icon = -1
+        if spec.icon_path:
+            icon = kw.load_custom_icon(spec.icon_path)
+        action_name = self.action_name(spec)
+        kw.unregister_action(action_name)
+        handler = spec.handler()
+        action_desc = kw.action_desc_t(
+            action_name,
+            spec.text,
+            handler,
+            spec.shortcut,
+            spec.tooltip,
+            icon,
+        )
+        if not kw.register_action(action_desc):
+            return False
+        self._actions.append(action_desc)
+        self._action_names.append(action_name)
+        self._handlers.append(handler)
+        return True
 
-        return self._actions[index]
+    def unregister_all(self) -> None:
+        for action_name in reversed(self._action_names):
+            kw.unregister_action(action_name)
+        self._actions.clear()
+        self._action_names.clear()
+        self._handlers.clear()
 
-
-actions_manager = ActionsManager()
-ACTION_CreatePatternFromSelectedCodeHandler = actions_manager.register(CreatePatternFromSelectedCodeHandler,
-                                                                       "Create code pattern from selected range",
-                                                                       shortcut="Ctrl+Alt+R")
-ACTION_CreatePatternFromFunctionHandler = actions_manager.register(CreatePatternFromFunctionHandler,
-                                                                   "Create code pattern from selected function",
-                                                                   shortcut="Ctrl+Alt+F")
-ACTION_CreatePatternFromSelectedInstructionHandler = \
-    actions_manager.register(CreatePatternFromSelectedInstructionHandler,
-                             "Create code pattern from selected instruction",
-                             shortcut="Ctrl+Alt+I")
-
-ACTION_CreatePatternFromSelectedBasicBlockHandler = \
-    actions_manager.register(CreatePatternFromSelectedBasicBlockHandler,
-                             "Create code pattern from selected basic block",
-                             shortcut="Ctrl+Alt+B")
+    @staticmethod
+    def action_name(spec: ActionSpec) -> str:
+        return f"{ACTION_PREFIX}{spec.handler.__name__}"

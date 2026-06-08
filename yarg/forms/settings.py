@@ -1,279 +1,434 @@
-import idaapi
-import ida_kernwin as kw
+from dataclasses import dataclass
 
+from PySide6 import QtCore, QtWidgets
 from capstone.x86_const import *
 
 
-class SettingsDialog(kw.Form):
-    def __init__(self, version="0.1", extension=r"", extension_controls={}):
-        controls = {'cModeGroup1': idaapi.Form.ChkGroupControl(("cGpRegistersParam", "cSRegistersParam",)),
-                    'cModeGroup2': idaapi.Form.RadGroupControl(("cFullAddressParam", "cOneByteAddressParam",
-                                                                "cTwoByteAddressParam",), 1),
-                    'FormChangeCb': idaapi.Form.FormChangeCb(self.OnFormChange),
+@dataclass
+class _CheckControl:
+    checked: bool = False
 
-                    'cModeGroup4': idaapi.Form.ChkGroupControl(("cFoldSameHigh4bit", "cFoldSameLow4bit",
-                                                                "cStripWildCards", "cTrackBasicBlockSequences",)),
-                    'cModeGroup3': idaapi.Form.RadGroupControl(("cFullCodeOffsetParam",
-                                                                "cOneByteOffsetParam",
-                                                                "cTwoByteOffsetParam",), 1),
-                    'cModeGroup5': idaapi.Form.ChkGroupControl(("cImmediateParam", "cGpImmParam", "cSImmParam",)),
-                    'cModeGroup6': idaapi.Form.ChkGroupControl(("iR8", "iR9", "iR10", "iR11",
-                                                                "iR12", "iR13", "iR14", "iR15",)),
-                    'cModeGroup7': idaapi.Form.ChkGroupControl(("iAX", "iDX", "iCX", "iBX", "iSI",
-                                                                "iDI", "iSP", "iBP",)),
-                    'cModeGroup8': idaapi.Form.ChkGroupControl(("iSP", "iBP",)),
-                    'cModeGroup9': idaapi.Form.ChkGroupControl(("cSDisplacementParam", "cGpDisplacementParam",))
-                    }
-        controls.update(extension_controls)
 
-        kw.Form.__init__(self, r"""Code pattern generator for IDA. v""" + version + r"""
-                        {FormChangeCb}
-                        <##Registers##GP registers parametrisation:{cGpRegistersParam}>
-                        <#SP/BP registers parametrisation:{cSRegistersParam}>{cModeGroup1}>
-                        <##GP selector##(E/R/H/L)AX:{iAX}><(E/R/H/L)DX:{iDX}>              
-                        <(E/R/H/L)CX:{iCX}>
-                        <(E/R/H/L)BX:{iBX}>
-                        <(E/R/H/L)SI:{iSI}>
-                        <(E/R/H/L)DI:{iDI}>{cModeGroup7}>
-                        <##GP64 selector##(R/D/W)R8:{iR8}><(R/D/W)R9:{iR9}>
-                        <(R/D/W)R10:{iR10}>
-                        <(R/D/W)R11:{iR11}>
-                        <(R/D/W)R12:{iR12}>
-                        <(R/D/W)R13:{iR13}>
-                        <(R/D/W)R14:{iR14}>
-                        <(R/D/W)R15:{iR15}>{cModeGroup6}>
-                        <##SP selector##(E/R/H/L)SP:{iSP}> | <(E/R/H/L)BP:{iBP}>{cModeGroup8}>
-                        <##Address##Full address parametrisation:{cFullAddressParam}>
-                        <#Parameterize first 3 bytes of address (32bit):{cOneByteAddressParam}>
-                        <#Parameterize first 2 bytes of address (32bit):{cTwoByteAddressParam}>{cModeGroup2}>
-                        <##Code offset##Full offset parametrisation:{cFullCodeOffsetParam}>
-                        <#Parameterize first 3 bytes of offset:{cOneByteOffsetParam}>
-                        <#Parameterize first 2 bytes of offset:{cTwoByteOffsetParam}>{cModeGroup3}>
-                        <##Pattern optimization##Alternatives with same low 4 bits are folding:{cFoldSameLow4bit}>
-                        <#Alternatives with same high 4 bits are folding:{cFoldSameHigh4bit}>
-                        <#Strip trailing wildcards:{cStripWildCards}>{cModeGroup4}>
-                        <##Immediate value##All constants parametrisation:{cImmediateParam}>
-                        <#SP/BP constants parametrisation:{cSImmParam}>
-                        <#GP registers constants parametrisation:{cGpImmParam}>{cModeGroup5}>
-                        <##Displacement##><#SP/BP displacement parametrisation:{cSDisplacementParam}>
-                        <#GP displacement parametrisation:{cGpDisplacementParam}>{cModeGroup9}>
-                        """ + extension, controls)
-
+class SettingsDialog:
+    def __init__(self, version="0.1", extension=r"", extension_controls=None):
+        self.version = version
+        self.extension = extension
+        self.extension_controls = extension_controls or {}
         self.address_parameterization_mode = 1
         self.offset_parameterization_mode = 1
         self.is_gp_enabled = True
         self.is_sp_enabled = False
-
         self.gp_regs = []
         self.sp_regs = []
 
-        self.gp_chk_regs = []
-        self.sp_chk_regs = []
+        for name in (
+            "cGpRegistersParam",
+            "cSRegistersParam",
+            "cFoldSameHigh4bit",
+            "cFoldSameLow4bit",
+            "cStripWildCards",
+            "cTrackBasicBlockSequences",
+            "cImmediateParam",
+            "cGpImmParam",
+            "cSImmParam",
+            "cSDisplacementParam",
+            "cGpDisplacementParam",
+            "iAX",
+            "iDX",
+            "iCX",
+            "iBX",
+            "iSI",
+            "iDI",
+            "iSP",
+            "iBP",
+            "iR8",
+            "iR9",
+            "iR10",
+            "iR11",
+            "iR12",
+            "iR13",
+            "iR14",
+            "iR15",
+        ):
+            setattr(self, name, _CheckControl())
 
-    def OnFormChange(self, fid):
-        if fid == -1:
-            self.set_default_control_activation()
+        self.gp_chk_regs = [
+            self.iAX,
+            self.iDX,
+            self.iCX,
+            self.iBX,
+            self.iSI,
+            self.iDI,
+            self.iR8,
+            self.iR9,
+            self.iR10,
+            self.iR11,
+            self.iR12,
+            self.iR13,
+            self.iR14,
+            self.iR15,
+        ]
+        self.sp_chk_regs = [self.iSP, self.iBP]
+        self._checkbox_widgets = {}
+        self._address_buttons = []
+        self._offset_buttons = []
 
-        elif fid == self.cGpRegistersParam.id:
-            self.is_gp_enabled = not self.is_gp_enabled
-            self.cGpRegistersParam.checked = self.is_gp_enabled
+    def Compile(self):
+        return True
 
-            self.toogle_gp(self.is_gp_enabled)
-            self.check_all_gp(self.is_gp_enabled, update=True)
+    def Execute(self):
+        dialog = QtWidgets.QDialog()
+        dialog.setWindowTitle(f"Code pattern generator for IDA. v{self.version}")
+        dialog.setModal(True)
+        dialog.setSizeGripEnabled(True)
+        dialog.resize(920, 760)
+        dialog.setMinimumSize(560, 420)
 
-        elif fid == self.cSRegistersParam.id:
-            self.is_sp_enabled = not self.is_sp_enabled
-            self.cSRegistersParam.checked = self.is_sp_enabled
+        main_layout = QtWidgets.QVBoxLayout(dialog)
+        scroll_area = QtWidgets.QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        content = QtWidgets.QWidget()
+        content_layout = QtWidgets.QVBoxLayout(content)
+        content_layout.setAlignment(QtCore.Qt.AlignTop)
 
-            self.toogle_sp(self.is_sp_enabled)
-            self.check_all_sp(self.is_sp_enabled, update=True)
+        self._checkbox_widgets = {}
+        for group in (
+            self._registers_group(),
+            self._radio_group(
+                "Address",
+                [
+                    "Full address parametrisation",
+                    "Parameterize first 3 bytes of address (32bit)",
+                    "Parameterize first 2 bytes of address (32bit)",
+                ],
+                self.address_parameterization_mode,
+                "_address_buttons",
+            ),
+            self._radio_group(
+                "Code offset",
+                [
+                    "Full offset parametrisation",
+                    "Parameterize first 3 bytes of offset",
+                    "Parameterize first 2 bytes of offset",
+                ],
+                self.offset_parameterization_mode,
+                "_offset_buttons",
+            ),
+            self._checkbox_group(
+                "Pattern optimization",
+                [
+                    ("Alternatives with same low 4 bits are folding", self.cFoldSameLow4bit),
+                    ("Alternatives with same high 4 bits are folding", self.cFoldSameHigh4bit),
+                    ("Strip trailing wildcards", self.cStripWildCards),
+                ],
+            ),
+            self._checkbox_group(
+                "Immediate value",
+                [
+                    ("All constants parametrisation", self.cImmediateParam),
+                    ("SP/BP constants parametrisation", self.cSImmParam),
+                    ("GP registers constants parametrisation", self.cGpImmParam),
+                ],
+            ),
+            self._checkbox_group(
+                "Displacement",
+                [
+                    ("SP/BP displacement parametrisation", self.cSDisplacementParam),
+                    ("GP displacement parametrisation", self.cGpDisplacementParam),
+                ],
+            ),
+        ):
+            content_layout.addWidget(group)
 
-        elif fid == self.cSDisplacementParam.id:
-            self.cSDisplacementParam.checked = not self.cSDisplacementParam.checked
-        elif fid == self.cModeGroup2.id:
-            self.address_parameterization_mode = self.GetControlValue(self.cModeGroup2)
-        elif fid == self.cModeGroup3.id:
-            self.offset_parameterization_mode = self.GetControlValue(self.cModeGroup3)
-        elif fid == self.cFoldSameLow4bit.id:
-            self.cFoldSameLow4bit.checked = not self.cFoldSameLow4bit.checked
-        elif fid == self.cFoldSameHigh4bit.id:
-            self.cFoldSameHigh4bit.checked = not self.cFoldSameHig4hbit.checked
-        elif fid == self.cImmediateParam.id:
-            self.cImmediateParam.checked = not self.cImmediateParam.checked
-        elif fid == self.cStripWildCards.id:
-            self.cStripWildCards.checked = not self.cStripWildCards.checked
-        elif fid == self.cSImmParam.checked:
-            self.cSImmParam.checked = not self.cSImmParam.checked
-        elif fid == self.cGpImmParam.checked:
-            self.cGpImmParam.checked = not self.cGpImmParam.checked
-        elif fid == self.iAX.id:
-            self.iAX.checked = not self.iAX.checked
+        content_layout.addStretch(1)
+        scroll_area.setWidget(content)
+        main_layout.addWidget(scroll_area)
 
-            self.fill_gp_collection_by_control_state(self.iAX,
-                                                     [X86_REG_AH, X86_REG_AL, X86_REG_AX, X86_REG_EAX, X86_REG_RAX])
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        main_layout.addWidget(buttons)
 
-        elif fid == self.iDX.id:
-            self.iDX.checked = not self.iDX.checked
+        self._apply_gp_master(self.cGpRegistersParam.checked)
+        self._apply_sp_master(self.cSRegistersParam.checked)
 
-            self.fill_gp_collection_by_control_state(self.iDX,
-                                                     [X86_REG_DH, X86_REG_DL, X86_REG_DX, X86_REG_EDX, X86_REG_RDX])
+        if dialog.exec() != QtWidgets.QDialog.Accepted:
+            return 0
 
-        elif fid == self.iCX.id:
-            self.iCX.checked = not self.iCX.checked
-
-            self.fill_gp_collection_by_control_state(self.iCX,
-                                                     [X86_REG_CH, X86_REG_CL, X86_REG_CX, X86_REG_ECX, X86_REG_RCX])
-
-        elif fid == self.iBX.id:
-            self.iBX.checked = not self.iBX.checked
-
-            self.fill_gp_collection_by_control_state(self.iBX,
-                                                     [X86_REG_BH, X86_REG_BL, X86_REG_BX, X86_REG_EBX, X86_REG_RBX])
-
-        elif fid == self.iSI.id:
-            self.iSI.checked = not self.iSI.checked
-
-            self.fill_gp_collection_by_control_state(self.iSI,
-                                                     [X86_REG_SIL, X86_REG_SI, X86_REG_ESI, X86_REG_RSI])
-        elif fid == self.iDI.id:
-            self.iDI.checked = not self.iDI.checked
-
-            self.fill_gp_collection_by_control_state(self.iDI,
-                                                     [X86_REG_DIL, X86_REG_EDI, X86_REG_RDI])
-        elif fid == self.iSP.id:
-            self.iSP.checked = not self.iSP.checked
-
-            self.fill_sp_collection_by_control_state(self.iSP,
-                                                     [X86_REG_SPL, X86_REG_SP, X86_REG_ESP, X86_REG_RSP])
-        elif fid == self.iBP.id:
-            self.iBP.checked = not self.iBP.checked
-
-            self.fill_sp_collection_by_control_state(self.iBP,
-                                                     [X86_REG_BPL, X86_REG_BP, X86_REG_EBP, X86_REG_RBP])
-        elif fid == self.iR8.id:
-            self.iR8.checked = not self.iR8.checked
-
-            self.fill_gp_collection_by_control_state(self.iR8,
-                                                     [X86_REG_R8B, X86_REG_R8W, X86_REG_R8D, X86_REG_R8])
-
-        elif fid == self.iR9.id:
-            self.iR9.checked = not self.iR9.checked
-
-            self.fill_gp_collection_by_control_state(self.iR9,
-                                                     [X86_REG_R9B, X86_REG_R9W, X86_REG_R9D, X86_REG_R9])
-        elif fid == self.iR10.id:
-            self.iR10.checked = not self.iR10.checked
-
-            self.fill_gp_collection_by_control_state(self.iR10,
-                                                     [X86_REG_R10B, X86_REG_R10W, X86_REG_R10D, X86_REG_R10])
-        elif fid == self.iR11.id:
-            self.iR11.checked = not self.iR11.checked
-
-            self.fill_gp_collection_by_control_state(self.iR11,
-                                                     [X86_REG_R11B, X86_REG_R11W, X86_REG_R11D, X86_REG_R11])
-        elif fid == self.iR12.id:
-            self.iR12.checked = not self.iR12.checked
-
-            self.fill_gp_collection_by_control_state(self.iR12,
-                                                     [X86_REG_R12B, X86_REG_R12W, X86_REG_R12D, X86_REG_R12])
-        elif fid == self.iR13.id:
-            self.iR13.checked = not self.iR13.checked
-
-            self.fill_gp_collection_by_control_state(self.iR13,
-                                                     [X86_REG_R13B, X86_REG_R13W, X86_REG_R13D, X86_REG_R13])
-        elif fid == self.iR14.id:
-            self.iR14.checked = not self.iR14.checked
-
-            self.fill_gp_collection_by_control_state(self.iR14,
-                                                     [X86_REG_R14B, X86_REG_R14W, X86_REG_R14D, X86_REG_R14])
-
-        elif fid == self.iR15.id:
-            self.iR15.checked = not self.iR15.checked
-
-            self.fill_gp_collection_by_control_state(self.iR15,
-                                                     [X86_REG_R15B, X86_REG_R15W, X86_REG_R15D, X86_REG_R15])
-
+        self._sync_from_widgets()
         return 1
 
-    def set_default_control_activation(self):
-        self.gp_chk_regs = [self.iAX, self.iDX, self.iCX, self.iBX, self.iSI, self.iDI, self.iR8, self.iR9, self.iR10,
-                            self.iR11, self.iR12, self.iR13, self.iR14, self.iR15]
-        self.sp_chk_regs = [self.iSP, self.iBP]
-
-        self.toogle_gp(self.is_gp_enabled)
-        self.toogle_sp(self.is_sp_enabled)
-
     def set_default_check_box_values(self):
-        self.gp_chk_regs = [self.iAX, self.iDX, self.iCX, self.iBX, self.iSI, self.iDI, self.iR8, self.iR9, self.iR10,
-                            self.iR11, self.iR12, self.iR13, self.iR14, self.iR15]
-        self.sp_chk_regs = [self.iSP, self.iBP]
-
         self.cGpRegistersParam.checked = self.is_gp_enabled
         self.cSRegistersParam.checked = self.is_sp_enabled
-
         self.cFoldSameHigh4bit.checked = True
         self.cFoldSameLow4bit.checked = True
         self.cSImmParam.checked = True
         self.cStripWildCards.checked = True
         self.cSDisplacementParam.checked = True
-
         self.check_all_gp(self.is_gp_enabled)
         self.check_all_sp(self.is_sp_enabled)
-
-    def toogle_gp(self, status):
-        for control in self.gp_chk_regs:
-            self.EnableField(control, status)
-
-    def toogle_sp(self, status):
-        for control in self.sp_chk_regs:
-            self.EnableField(control, status)
 
     def check_all_gp(self, state, update=False):
         for control in self.gp_chk_regs:
             control.checked = state
-
-            if update:
-                self.RefreshField(control)
-                self.SetControlValue(control, state)
-
-        all_gp = [X86_REG_AH, X86_REG_AL, X86_REG_AX, X86_REG_EAX, X86_REG_RAX, X86_REG_DH, X86_REG_DL, X86_REG_DX,
-                  X86_REG_EDX, X86_REG_RDX, X86_REG_CH, X86_REG_CL, X86_REG_CX, X86_REG_ECX, X86_REG_RCX,
-                  X86_REG_BH, X86_REG_BL, X86_REG_BX, X86_REG_EBX, X86_REG_RBX, X86_REG_SIL, X86_REG_SI,
-                  X86_REG_ESI, X86_REG_RSI, X86_REG_DIL, X86_REG_EDI, X86_REG_RDI, X86_REG_R8B,
-                  X86_REG_R8W, X86_REG_R8D, X86_REG_R8, X86_REG_R9B, X86_REG_R9W, X86_REG_R9D, X86_REG_R9,
-                  X86_REG_R10B, X86_REG_R10W, X86_REG_R10D, X86_REG_R10, X86_REG_R11B, X86_REG_R11W, X86_REG_R11D,
-                  X86_REG_R11, X86_REG_R12B, X86_REG_R12W, X86_REG_R12D, X86_REG_R12, X86_REG_R13B, X86_REG_R13W,
-                  X86_REG_R13D, X86_REG_R13, X86_REG_R14B, X86_REG_R14W, X86_REG_R14D, X86_REG_R14, X86_REG_R15B,
-                  X86_REG_R15W, X86_REG_R15D, X86_REG_R15]
-
-        if state:
-            self.gp_regs.extend(all_gp)
-        else:
-            self.gp_regs = [x for x in self.gp_regs if x not in all_gp]
+        all_gp = [
+            X86_REG_AH,
+            X86_REG_AL,
+            X86_REG_AX,
+            X86_REG_EAX,
+            X86_REG_RAX,
+            X86_REG_DH,
+            X86_REG_DL,
+            X86_REG_DX,
+            X86_REG_EDX,
+            X86_REG_RDX,
+            X86_REG_CH,
+            X86_REG_CL,
+            X86_REG_CX,
+            X86_REG_ECX,
+            X86_REG_RCX,
+            X86_REG_BH,
+            X86_REG_BL,
+            X86_REG_BX,
+            X86_REG_EBX,
+            X86_REG_RBX,
+            X86_REG_SIL,
+            X86_REG_SI,
+            X86_REG_ESI,
+            X86_REG_RSI,
+            X86_REG_DIL,
+            X86_REG_EDI,
+            X86_REG_RDI,
+            X86_REG_R8B,
+            X86_REG_R8W,
+            X86_REG_R8D,
+            X86_REG_R8,
+            X86_REG_R9B,
+            X86_REG_R9W,
+            X86_REG_R9D,
+            X86_REG_R9,
+            X86_REG_R10B,
+            X86_REG_R10W,
+            X86_REG_R10D,
+            X86_REG_R10,
+            X86_REG_R11B,
+            X86_REG_R11W,
+            X86_REG_R11D,
+            X86_REG_R11,
+            X86_REG_R12B,
+            X86_REG_R12W,
+            X86_REG_R12D,
+            X86_REG_R12,
+            X86_REG_R13B,
+            X86_REG_R13W,
+            X86_REG_R13D,
+            X86_REG_R13,
+            X86_REG_R14B,
+            X86_REG_R14W,
+            X86_REG_R14D,
+            X86_REG_R14,
+            X86_REG_R15B,
+            X86_REG_R15W,
+            X86_REG_R15D,
+            X86_REG_R15,
+        ]
+        self.gp_regs = list(dict.fromkeys(self.gp_regs + all_gp)) if state else []
+        if update:
+            for control in self.gp_chk_regs:
+                self._set_widget_checked(control, state)
 
     def check_all_sp(self, state, update=False):
         for control in self.sp_chk_regs:
             control.checked = state
-
-            if update:
-                self.RefreshField(control)
-                self.SetControlValue(control, state)
-
         all_sp = [X86_REG_SPL, X86_REG_SP, X86_REG_ESP, X86_REG_RSP, X86_REG_BPL, X86_REG_BP, X86_REG_EBP, X86_REG_RBP]
-
-        if state:
-            self.sp_regs.extend(all_sp)
-        else:
-            self.sp_regs = [x for x in self.sp_regs if x not in all_sp]
+        self.sp_regs = list(dict.fromkeys(self.sp_regs + all_sp)) if state else []
+        if update:
+            for control in self.sp_chk_regs:
+                self._set_widget_checked(control, state)
 
     def fill_gp_collection_by_control_state(self, control, regs):
-        if control.checked:
-            self.gp_regs.extend(regs)
-        else:
-            self.gp_regs = [x for x in self.gp_regs if x not in regs]
+        self.gp_regs = (
+            list(dict.fromkeys(self.gp_regs + regs)) if control.checked else [x for x in self.gp_regs if x not in regs]
+        )
 
     def fill_sp_collection_by_control_state(self, control, regs):
-        if control.checked:
-            self.sp_regs.extend(regs)
-        else:
-            self.sp_regs = [x for x in self.sp_regs if x not in regs]
+        self.sp_regs = (
+            list(dict.fromkeys(self.sp_regs + regs)) if control.checked else [x for x in self.sp_regs if x not in regs]
+        )
+
+    def _registers_group(self):
+        group = QtWidgets.QGroupBox("Registers")
+        layout = QtWidgets.QVBoxLayout(group)
+        gp_master = self._checkbox("GP registers parametrisation", self.cGpRegistersParam)
+        sp_master = self._checkbox("SP/BP registers parametrisation", self.cSRegistersParam)
+        gp_master.toggled.connect(self._apply_gp_master)
+        sp_master.toggled.connect(self._apply_sp_master)
+        layout.addWidget(gp_master)
+        layout.addWidget(sp_master)
+        layout.addWidget(
+            self._selector_group(
+                "GP selector",
+                [
+                    ("(E/R/H/L)AX", self.iAX),
+                    ("(E/R/H/L)DX", self.iDX),
+                    ("(E/R/H/L)CX", self.iCX),
+                    ("(E/R/H/L)BX", self.iBX),
+                    ("(E/R/H/L)SI", self.iSI),
+                    ("(E/R/H/L)DI", self.iDI),
+                ],
+                3,
+            )
+        )
+        layout.addWidget(
+            self._selector_group(
+                "GP64 selector",
+                [
+                    ("(R/D/W)R8", self.iR8),
+                    ("(R/D/W)R9", self.iR9),
+                    ("(R/D/W)R10", self.iR10),
+                    ("(R/D/W)R11", self.iR11),
+                    ("(R/D/W)R12", self.iR12),
+                    ("(R/D/W)R13", self.iR13),
+                    ("(R/D/W)R14", self.iR14),
+                    ("(R/D/W)R15", self.iR15),
+                ],
+                4,
+            )
+        )
+        layout.addWidget(self._selector_group("SP selector", [("(E/R/H/L)SP", self.iSP), ("(E/R/H/L)BP", self.iBP)], 2))
+        return group
+
+    def _selector_group(self, title, controls, columns):
+        group = QtWidgets.QGroupBox(title)
+        layout = QtWidgets.QGridLayout(group)
+        for index, (label, control) in enumerate(controls):
+            layout.addWidget(self._checkbox(label, control), index // columns, index % columns)
+        return group
+
+    def _checkbox_group(self, title, controls):
+        group = QtWidgets.QGroupBox(title)
+        layout = QtWidgets.QVBoxLayout(group)
+        for label, control in controls:
+            layout.addWidget(self._checkbox(label, control))
+        return group
+
+    def _radio_group(self, title, labels, checked_index, target_attr):
+        group = QtWidgets.QGroupBox(title)
+        layout = QtWidgets.QVBoxLayout(group)
+        buttons = []
+        for index, label in enumerate(labels):
+            button = QtWidgets.QRadioButton(label)
+            button.setChecked(index == checked_index)
+            layout.addWidget(button)
+            buttons.append(button)
+        setattr(self, target_attr, buttons)
+        return group
+
+    def _checkbox(self, label, control):
+        checkbox = QtWidgets.QCheckBox(label)
+        checkbox.setChecked(control.checked)
+        self._checkbox_widgets[id(control)] = checkbox
+        return checkbox
+
+    def _set_widget_checked(self, control, state):
+        widget = self._checkbox_widgets.get(id(control))
+        if widget is not None:
+            widget.setChecked(state)
+
+    def _apply_gp_master(self, enabled):
+        for control in self.gp_chk_regs:
+            widget = self._checkbox_widgets.get(id(control))
+            if widget is not None:
+                widget.setEnabled(bool(enabled))
+                widget.setChecked(bool(enabled))
+
+    def _apply_sp_master(self, enabled):
+        for control in self.sp_chk_regs:
+            widget = self._checkbox_widgets.get(id(control))
+            if widget is not None:
+                widget.setEnabled(bool(enabled))
+                widget.setChecked(bool(enabled))
+
+    def _sync_from_widgets(self):
+        for control in self._all_controls():
+            widget = self._checkbox_widgets.get(id(control))
+            if widget is not None:
+                control.checked = widget.isChecked()
+        self.address_parameterization_mode = self._checked_button_index(self._address_buttons)
+        self.offset_parameterization_mode = self._checked_button_index(self._offset_buttons)
+        self.is_gp_enabled = self.cGpRegistersParam.checked
+        self.is_sp_enabled = self.cSRegistersParam.checked
+        self.gp_regs = []
+        self.sp_regs = []
+        for control, regs, callback in self._register_groups():
+            callback(control, regs)
+
+    def _all_controls(self):
+        return [value for value in self.__dict__.values() if isinstance(value, _CheckControl)]
+
+    def _register_groups(self):
+        return [
+            (
+                self.iAX,
+                [X86_REG_AH, X86_REG_AL, X86_REG_AX, X86_REG_EAX, X86_REG_RAX],
+                self.fill_gp_collection_by_control_state,
+            ),
+            (
+                self.iDX,
+                [X86_REG_DH, X86_REG_DL, X86_REG_DX, X86_REG_EDX, X86_REG_RDX],
+                self.fill_gp_collection_by_control_state,
+            ),
+            (
+                self.iCX,
+                [X86_REG_CH, X86_REG_CL, X86_REG_CX, X86_REG_ECX, X86_REG_RCX],
+                self.fill_gp_collection_by_control_state,
+            ),
+            (
+                self.iBX,
+                [X86_REG_BH, X86_REG_BL, X86_REG_BX, X86_REG_EBX, X86_REG_RBX],
+                self.fill_gp_collection_by_control_state,
+            ),
+            (self.iSI, [X86_REG_SIL, X86_REG_SI, X86_REG_ESI, X86_REG_RSI], self.fill_gp_collection_by_control_state),
+            (self.iDI, [X86_REG_DIL, X86_REG_EDI, X86_REG_RDI], self.fill_gp_collection_by_control_state),
+            (self.iSP, [X86_REG_SPL, X86_REG_SP, X86_REG_ESP, X86_REG_RSP], self.fill_sp_collection_by_control_state),
+            (self.iBP, [X86_REG_BPL, X86_REG_BP, X86_REG_EBP, X86_REG_RBP], self.fill_sp_collection_by_control_state),
+            (self.iR8, [X86_REG_R8B, X86_REG_R8W, X86_REG_R8D, X86_REG_R8], self.fill_gp_collection_by_control_state),
+            (self.iR9, [X86_REG_R9B, X86_REG_R9W, X86_REG_R9D, X86_REG_R9], self.fill_gp_collection_by_control_state),
+            (
+                self.iR10,
+                [X86_REG_R10B, X86_REG_R10W, X86_REG_R10D, X86_REG_R10],
+                self.fill_gp_collection_by_control_state,
+            ),
+            (
+                self.iR11,
+                [X86_REG_R11B, X86_REG_R11W, X86_REG_R11D, X86_REG_R11],
+                self.fill_gp_collection_by_control_state,
+            ),
+            (
+                self.iR12,
+                [X86_REG_R12B, X86_REG_R12W, X86_REG_R12D, X86_REG_R12],
+                self.fill_gp_collection_by_control_state,
+            ),
+            (
+                self.iR13,
+                [X86_REG_R13B, X86_REG_R13W, X86_REG_R13D, X86_REG_R13],
+                self.fill_gp_collection_by_control_state,
+            ),
+            (
+                self.iR14,
+                [X86_REG_R14B, X86_REG_R14W, X86_REG_R14D, X86_REG_R14],
+                self.fill_gp_collection_by_control_state,
+            ),
+            (
+                self.iR15,
+                [X86_REG_R15B, X86_REG_R15W, X86_REG_R15D, X86_REG_R15],
+                self.fill_gp_collection_by_control_state,
+            ),
+        ]
+
+    def _checked_button_index(self, buttons):
+        for index, button in enumerate(buttons):
+            if button.isChecked():
+                return index
+        return 0

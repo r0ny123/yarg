@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+
+    - name: Run Ruff checks
+      run: |
+        ruff format --check .
+        ruff check .
+
+    - name: Compile plugin sources
+      run: |
+        python -m compileall -q yarg yarg.py
+
+    - name: Run tests
+      run: |
+        python -m pytest
+
+    - name: Install HCLI
+      if: matrix.python-version == '3.13'
+      run: |
+        curl -LsSf https://hcli.docs.hex-rays.com/install | sh
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Lint IDA plugin metadata
+      if: matrix.python-version == '3.13'
+      run: |
+        hcli plugin lint .

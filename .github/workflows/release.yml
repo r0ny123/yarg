@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build installable HCLI plugin release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Read plugin metadata
+        id: metadata
+        shell: bash
+        run: |
+          VERSION=$(jq -r '.plugin.version' ida-plugin.json)
+          TAG="v${VERSION}"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "${TAG}" ]]; then
+            echo "::error::Release tag ${GITHUB_REF_NAME} does not match ida-plugin.json version ${VERSION}"
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "archive=yarg-${VERSION}.zip" >> "${GITHUB_OUTPUT}"
+
+      - name: Build plugin ZIP
+        env:
+          ARCHIVE: ${{ steps.metadata.outputs.archive }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf package dist
+          mkdir -p package/yarg dist
+          cp ida-plugin.json yarg.py README.md CHANGELOG.md package/
+          rsync -a \
+            --exclude "__pycache__" \
+            --exclude "*.pyc" \
+            --exclude ".DS_Store" \
+            yarg/ package/yarg/
+          (cd package && zip -r "../dist/${ARCHIVE}" .)
+          unzip -l "dist/${{ steps.metadata.outputs.archive }}"
+
+      - name: Install HCLI
+        run: |
+          curl -LsSf https://hcli.docs.hex-rays.com/install | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Lint release ZIP with HCLI
+        run: |
+          hcli plugin lint "dist/${{ steps.metadata.outputs.archive }}"
+
+      - name: Create or update GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "dist/${{ steps.metadata.outputs.archive }}"
+          artifactErrorsFailBuild: true
+          generateReleaseNotes: true
+          makeLatest: true
+          name: ${{ steps.metadata.outputs.tag }}
+          omitBodyDuringUpdate: true
+          replacesArtifacts: true
+          tag: ${{ steps.metadata.outputs.tag }}

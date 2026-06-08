@@ -1,8 +1,13 @@
 from dataclasses import dataclass
 
 
-from ..utils import SettingsDialog, generate_8bit_pattern_2_0_any, \
-    generate_8bit_pattern_5_0_any, generate_8bit_pattern_5_3_any, dbg_print
+from ..utils import (
+    SettingsDialog,
+    generate_8bit_pattern_2_0_any,
+    generate_8bit_pattern_5_0_any,
+    generate_8bit_pattern_5_3_any,
+    dbg_print,
+)
 
 
 @dataclass
@@ -14,9 +19,10 @@ class ModRm:
     rm_ext: int
 
     @classmethod
-    def from_instr(cls, instr, reg_ext, rm_ext) -> 'ModRm':
-        return cls(mod=instr.modrm >> 6, reg=(instr.modrm & 0x38) >> 3,
-                   rm=instr.modrm & 7, reg_ext=reg_ext, rm_ext=rm_ext)
+    def from_instr(cls, instr, reg_ext, rm_ext) -> "ModRm":
+        return cls(
+            mod=instr.modrm >> 6, reg=(instr.modrm & 0x38) >> 3, rm=instr.modrm & 7, reg_ext=reg_ext, rm_ext=rm_ext
+        )
 
     @property
     def reg_id(self):
@@ -75,8 +81,10 @@ class ModRm:
     def parameterize(self, rotate_reg, rotate_rm, settings: SettingsDialog):
         assert 0 <= rotate_reg <= 1 and 0 <= rotate_rm <= 1
 
-        generators = [[self._gen_cst_mode_reg_rm_pattern, self._gen_cst_mode_reg_pattern],
-                      [self._gen_cst_mode_rm, self._gen_cst_mode_pattern]]
+        generators = [
+            [self._gen_cst_mode_reg_rm_pattern, self._gen_cst_mode_reg_pattern],
+            [self._gen_cst_mode_rm, self._gen_cst_mode_pattern],
+        ]
 
         return generators[rotate_reg][rotate_rm](settings)
 
