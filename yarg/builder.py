@@ -1,3 +1,4 @@
+import re
 from struct import unpack
 from binascii import hexlify
 from dataclasses import dataclass
@@ -10,10 +11,53 @@ from .utils import SettingsDialog, get_bitness, dbg_print, TEMPLATE_SYMBOL
 from .yara_output import YaraInstructionComment
 
 
+# x86 legacy prefix bytes: lock/repeat (F0, F2, F3), segment overrides
+# (2E, 36, 3E, 26, 64, 65), and operand/address-size overrides (66, 67).
+LEGACY_PREFIX_BYTES = frozenset({0xF0, 0xF2, 0xF3, 0x2E, 0x36, 0x3E, 0x26, 0x64, 0x65, 0x66, 0x67})
+
+
 @dataclass(frozen=True)
 class PatternResult:
     pattern: str
     annotations: list[YaraInstructionComment]
+
+
+def pattern_to_regex(pattern: str) -> str | None:
+    """Translate a generated YARA hex pattern into a regex over an uppercase hex dump.
+
+    Hex nibbles map to themselves, ``?`` to a single hex-nibble class, and ``(a|b|...)``
+    alternation groups pass through unchanged. Returns ``None`` if the pattern contains an
+    unexpected character, which the caller treats as a non-match.
+    """
+    out = []
+    for char in pattern:
+        if char in "0123456789abcdefABCDEF":
+            out.append(char.upper())
+        elif char == "?":
+            out.append("[0-9A-F]")
+        elif char in "(|)":
+            out.append(char)
+        else:
+            return None
+    return "".join(out)
+
+
+def _finalize_instr_template(instr_template: str, instr_data: bytes) -> str:
+    """Guarantee a per-instruction template matches the instruction it was built from.
+
+    A generated pattern must always match the bytes it describes. Disassembler metadata can
+    be internally inconsistent on degenerate/obfuscated byte sequences, and encodings outside
+    the supported legacy ModR/M scheme (e.g. VEX/EVEX) are not modelled here; either can yield
+    a template that does not match the instruction. When that happens, fall back to the literal
+    instruction bytes, which match by definition.
+    """
+    target = instr_data.hex().upper()
+    regex = pattern_to_regex(instr_template)
+    if regex is not None and re.fullmatch(regex, target):
+        return instr_template
+
+    print("[!] Generated pattern does not match its instruction bytes; falling back to literal bytes")
+    return target
 
 
 def format_debug_table(headers, row) -> str:
@@ -132,11 +176,13 @@ def create_pattern_from_code(md: Cs, code: bytes, addr: int, settings: SettingsD
         instr_template_verb = [[]]
 
         # template legacy prefix.
-        # Extract number of prefix groups used in instruction
+        # Count the leading legacy-prefix bytes by decoding them directly rather than
+        # trusting instr.prefix: capstone silently absorbs redundant/ignored prefixes
+        # (e.g. an F3 on `xchg ebx, eax`) into neither instr.prefix nor instr.opcode, so
+        # counting instr.prefix would undercount and drop those bytes from the pattern.
         number_of_prefixes = 0
-        for prefix_byte in instr.prefix:
-            if prefix_byte:
-                number_of_prefixes += 1
+        while number_of_prefixes < len(instr_data) and instr_data[number_of_prefixes] in LEGACY_PREFIX_BYTES:
+            number_of_prefixes += 1
 
         legacy_prefix = "".join([f"{instr_data[x]:02X}" for x in range(number_of_prefixes)])
 
@@ -158,11 +204,19 @@ def create_pattern_from_code(md: Cs, code: bytes, addr: int, settings: SettingsD
         opcode_tempalte = special_templates(instr, dw_opcode, settings, db=db)
         if opcode_tempalte:
             instr_template += opcode_tempalte
-            code_pattern += instr_template
+            code_pattern += _finalize_instr_template(instr_template, instr_data)
             continue
 
-        # No special actions need. Just copy opcodes
-        opcode_tempalte = "".join([f"{opcode_byte:02X}" for opcode_byte in instr.opcode if opcode_byte])
+        # No special actions need. Just copy opcodes.
+        # Reconstruct the opcode bytes from instruction offsets rather than filtering
+        # instr.opcode for truthy bytes: a legitimate opcode byte can be 0x00 (e.g. ADD
+        # r/m8, r8 = 0x00, the 0F 00 /r group, three-byte 0F 38/0F 3A maps) and a truthy
+        # filter would silently drop it. The opcode spans from just after the legacy
+        # prefixes and REX byte up to the first encoded field that follows it.
+        opcode_start = number_of_prefixes + (1 if instr.rex else 0)
+        opcode_end_candidates = [off for off in (instr.modrm_offset, instr.disp_offset, instr.imm_offset) if off]
+        opcode_end = min(opcode_end_candidates) if opcode_end_candidates else len(instr_data)
+        opcode_tempalte = instr_data[opcode_start:opcode_end].hex().upper()
 
         instr_template += opcode_tempalte
         instr_template_verb[0].append(opcode_tempalte)
@@ -170,21 +224,21 @@ def create_pattern_from_code(md: Cs, code: bytes, addr: int, settings: SettingsD
         op_param = OperandParameterizer(instr, db=db)
 
         modrm_template = ""
-        if instr.modrm:
+        if instr.modrm_offset:
             modrm_template = op_param.parameterize_modrm_byte(settings)
 
         instr_template += modrm_template
         instr_template_verb[0].append(modrm_template)
 
         sib_template = ""
-        if instr.sib:
+        if op_param.sib is not None:
             sib_template = op_param.parameterize_sib_byte(settings)
 
         instr_template += sib_template
         instr_template_verb[0].append(sib_template)
 
         disp_template = ""
-        if instr.disp:
+        if instr.disp_offset:
             disp_template = op_param.parameterize_disp(settings)
 
         instr_template += disp_template
@@ -205,6 +259,6 @@ def create_pattern_from_code(md: Cs, code: bytes, addr: int, settings: SettingsD
         dbg_print(format_debug_table(instr_template_verb_hdr, instr_template_verb[0]))
         dbg_print("--------------------------------------------------------------")
 
-        code_pattern += instr_template
+        code_pattern += _finalize_instr_template(instr_template, instr_data)
 
     return PatternResult(pattern=code_pattern, annotations=annotations)

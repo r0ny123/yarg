@@ -19,8 +19,10 @@ class Displacement:
 
     @classmethod
     def from_instr(cls, instr, modrm: ModRm | None, sib: Sib | None) -> "Displacement":
+        # Clamp size to the bytes actually present rather than trusting instr.disp_size,
+        # so a bogus size reported by the disassembler cannot emit a runaway wildcard run.
         data = instr.bytes[instr.disp_offset : instr.disp_offset + instr.disp_size]
-        return cls(disp=instr.disp, modrm=modrm, sib=sib, offset=instr.disp_offset, size=instr.disp_size, data=data)
+        return cls(disp=instr.disp, modrm=modrm, sib=sib, offset=instr.disp_offset, size=len(data), data=data)
 
     def print(self):
         print(f"Disp: {self.disp: 08X}")

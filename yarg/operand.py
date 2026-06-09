@@ -45,7 +45,7 @@ class OperandParameterizer:
         self.sib: Sib | None = None
         self.disp: Displacement | None = None
 
-        if instr.modrm:
+        if instr.modrm_offset:
             self.modrm: ModRm = ModRm.from_instr(self._instr, R, B)
             if __debugmode__:
                 self.modrm.print()
@@ -55,7 +55,7 @@ class OperandParameterizer:
             if __debugmode__:
                 self.sib.print()
 
-        if instr.disp:
+        if instr.disp_offset:
             self.disp = Displacement.from_instr(instr, self.modrm, self.sib)
             if __debugmode__:
                 self.disp.print()
@@ -235,9 +235,12 @@ class OperandParameterizer:
         :return: (str) Parameterized pattern of the immediate value
         """
 
+        # Clamp imm_size to the bytes actually present: capstone can report a bogus
+        # imm_size for some encodings (e.g. far ptr16:32 calls report sizes far larger
+        # than the instruction), which would otherwise emit a runaway wildcard sequence.
         imm_offset = self._instr.imm_offset
-        imm_size = self._instr.imm_size
-        imm_data = self._instr.bytes[imm_offset : imm_offset + imm_size]
+        imm_data = self._instr.bytes[imm_offset : imm_offset + self._instr.imm_size]
+        imm_size = len(imm_data)
 
         imm_op = self.locator.locate(OPERAND_IMM)
 

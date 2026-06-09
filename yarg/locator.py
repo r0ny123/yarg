@@ -101,7 +101,7 @@ class OperandLocator:
                 self._mapping[OPERAND_DISP] = operand
                 continue
 
-            if self._modrm and self._modrm.is_mem_rip_rel():
+            if operand.type == X86_OP_MEM and self._modrm and self._modrm.is_mem_rip_rel():
                 dbg_print("_modrm +  is_mem_rip_rel() -> OPERAND_DISP")
                 self._mapping[OPERAND_DISP] = operand
                 continue

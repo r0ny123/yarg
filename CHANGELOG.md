@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-06-10
+
+### Added
+- Added a per-instruction safety net so a generated template that does not match its own instruction bytes (degenerate/obfuscated sequences, or unmodelled encodings such as VEX/EVEX) falls back to the literal bytes, guaranteeing every generated pattern matches the code it was built from.
+- Added regression tests covering zero-valued ModR/M, SIB, displacement, and opcode bytes, multi-byte opcode reconstruction, RIP-relative register-operand mapping, redundant prefixes, clamped immediate sizes, and the unmodelled-encoding fallback.
+- Added a differential fuzz test (`tests/test_fuzz_patterns.py`) that disassembles random byte sequences across both bitnesses and many settings combinations and asserts every generated pattern matches its source bytes.
+
+### Fixed
+- Fixed ModR/M, SIB, and displacement bytes being dropped from generated patterns when their value was `0x00` (e.g. `[rax]`, `[rbp]`, `[rax+rax]`). Presence is now detected via instruction offsets (`modrm_offset`, `disp_offset`) and the decoded SIB object instead of a truthy check on the byte value, which had produced patterns shorter than the instruction that could not match.
+- Fixed opcode bytes being dropped when an opcode byte was `0x00` (e.g. `ADD r/m8, r8`, the `0F 00 /r` group), and multi-byte opcodes being truncated (three-byte `0F 38`/`0F 3A` maps, mandatory `F3` prefixes for SSE). The opcode is now reconstructed from instruction offsets rather than filtering `instr.opcode` for truthy bytes.
+- Fixed the operand locator swallowing the register operand of RIP-relative instructions: the `is_mem_rip_rel()` branch now only matches memory operands, so the ModR/M `reg` operand is mapped correctly and can be parameterized.
+- Fixed redundant legacy prefixes being dropped (e.g. an `F3` on `xchg ebx, eax`): the prefix length is now decoded directly from the leading bytes rather than relying on `instr.prefix`, which capstone leaves empty for absorbed prefixes.
+- Fixed runaway wildcard sequences from bogus disassembler sizes: immediate and displacement sizes are now clamped to the bytes actually present (e.g. far `ptr16:32` calls, for which capstone reports an oversized `imm_size`).
+
 ## [1.0.3] - 2026-06-09
 
 ### Added
