@@ -20,8 +20,15 @@ def _load_rule_viewer(monkeypatch):
     qtwidgets = types.ModuleType("PySide6.QtWidgets")
 
     ida_kernwin.PluginForm = _PluginForm
-    qtgui.QFontDatabase = types.SimpleNamespace(FixedFont=0, systemFont=lambda font: font)
-    qtwidgets.QPlainTextEdit = types.SimpleNamespace(NoWrap=0)
+    qtgui.QFontDatabase = types.SimpleNamespace(
+        SystemFont=types.SimpleNamespace(FixedFont=0),
+        FixedFont=0,
+        systemFont=lambda font: font,
+    )
+    qtwidgets.QPlainTextEdit = types.SimpleNamespace(
+        LineWrapMode=types.SimpleNamespace(NoWrap=0),
+        NoWrap=0,
+    )
 
     monkeypatch.setitem(sys.modules, "ida_kernwin", ida_kernwin)
     monkeypatch.setitem(sys.modules, "PySide6", pyside6)

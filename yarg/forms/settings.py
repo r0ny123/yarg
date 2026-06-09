@@ -21,36 +21,33 @@ class SettingsDialog:
         self.gp_regs = []
         self.sp_regs = []
 
-        for name in (
-            "cGpRegistersParam",
-            "cSRegistersParam",
-            "cFoldSameHigh4bit",
-            "cFoldSameLow4bit",
-            "cStripWildCards",
-            "cTrackBasicBlockSequences",
-            "cImmediateParam",
-            "cGpImmParam",
-            "cSImmParam",
-            "cSDisplacementParam",
-            "cGpDisplacementParam",
-            "iAX",
-            "iDX",
-            "iCX",
-            "iBX",
-            "iSI",
-            "iDI",
-            "iSP",
-            "iBP",
-            "iR8",
-            "iR9",
-            "iR10",
-            "iR11",
-            "iR12",
-            "iR13",
-            "iR14",
-            "iR15",
-        ):
-            setattr(self, name, _CheckControl())
+        self.cGpRegistersParam = _CheckControl()
+        self.cSRegistersParam = _CheckControl()
+        self.cFoldSameHigh4bit = _CheckControl()
+        self.cFoldSameLow4bit = _CheckControl()
+        self.cStripWildCards = _CheckControl()
+        self.cTrackBasicBlockSequences = _CheckControl()
+        self.cImmediateParam = _CheckControl()
+        self.cGpImmParam = _CheckControl()
+        self.cSImmParam = _CheckControl()
+        self.cSDisplacementParam = _CheckControl()
+        self.cGpDisplacementParam = _CheckControl()
+        self.iAX = _CheckControl()
+        self.iDX = _CheckControl()
+        self.iCX = _CheckControl()
+        self.iBX = _CheckControl()
+        self.iSI = _CheckControl()
+        self.iDI = _CheckControl()
+        self.iSP = _CheckControl()
+        self.iBP = _CheckControl()
+        self.iR8 = _CheckControl()
+        self.iR9 = _CheckControl()
+        self.iR10 = _CheckControl()
+        self.iR11 = _CheckControl()
+        self.iR12 = _CheckControl()
+        self.iR13 = _CheckControl()
+        self.iR14 = _CheckControl()
+        self.iR15 = _CheckControl()
 
         self.gp_chk_regs = [
             self.iAX,
@@ -89,7 +86,7 @@ class SettingsDialog:
         scroll_area.setWidgetResizable(True)
         content = QtWidgets.QWidget()
         content_layout = QtWidgets.QVBoxLayout(content)
-        content_layout.setAlignment(QtCore.Qt.AlignTop)
+        content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
         self._checkbox_widgets = {}
         for group in (
@@ -144,7 +141,9 @@ class SettingsDialog:
         scroll_area.setWidget(content)
         main_layout.addWidget(scroll_area)
 
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok | QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         main_layout.addWidget(buttons)
@@ -152,7 +151,7 @@ class SettingsDialog:
         self._apply_gp_master(self.cGpRegistersParam.checked)
         self._apply_sp_master(self.cSRegistersParam.checked)
 
-        if dialog.exec() != QtWidgets.QDialog.Accepted:
+        if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
             self._checkbox_widgets.clear()
             self._address_buttons = []
             self._offset_buttons = []

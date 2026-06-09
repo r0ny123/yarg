@@ -43,6 +43,10 @@ class _AbstractButton(_Widget):
 
 
 class _QDialog(_Widget):
+    class DialogCode:
+        Accepted = 1
+        Rejected = 0
+
     Accepted = 1
     Rejected = 0
     next_result = Accepted
@@ -76,6 +80,10 @@ class _QDialog(_Widget):
 
 
 class _QDialogButtonBox(_Widget):
+    class StandardButton:
+        Ok = 1
+        Cancel = 2
+
     Ok = 1
     Cancel = 2
 
@@ -113,7 +121,7 @@ def _load_settings_module(monkeypatch):
     qtcore = types.ModuleType("PySide6.QtCore")
     qtwidgets = types.ModuleType("PySide6.QtWidgets")
 
-    qtcore.Qt = types.SimpleNamespace(AlignTop=1)
+    qtcore.Qt = types.SimpleNamespace(AlignmentFlag=types.SimpleNamespace(AlignTop=1))
     qtwidgets.QCheckBox = _AbstractButton
     qtwidgets.QDialog = _QDialog
     qtwidgets.QDialogButtonBox = _QDialogButtonBox

@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-06-09
+
+### Added
+- Added `ty` type checker (`ty==0.0.46`) to development dependencies and CI pipeline.
+
+### Changed
+- Added `PLUGIN_HIDE` flag to `YaraBuilder` so the plugin no longer appears as an inert entry in the Edit → Plugins menu; all user interaction goes through the right-click context menu.
+- Replaced dynamic `setattr` loop in `SettingsDialog.__init__` with explicit per-attribute assignments so static type checkers can resolve all `_CheckControl` attributes.
+- Replaced all flat PyQt5-style enum accesses with fully-qualified PySide6 equivalents: `QDialogButtonBox.StandardButton.Ok/Cancel`, `QDialog.DialogCode.Accepted`, `Qt.AlignmentFlag.AlignTop`, `QPlainTextEdit.LineWrapMode.NoWrap`, `QFontDatabase.SystemFont.FixedFont`.
+- Unified duplicate `InstructionAnnotation` dataclass in `builder.py` with `YaraInstructionComment` from `yara_output.py`.
+
+### Fixed
+- Fixed `RuntimeWarning` about PyQt5 shim bitwise operation triggered in `SettingsDialog.Execute`.
+- Fixed `invalid-method-override` in `Hooks.populating_widget_popup`: renamed `popup` parameter to `popup_handle` and added `ctx=None` default to match the `UI_Hooks` parent signature.
+- Fixed `invalid-assignment` in `OperandParameterizer.__init__`, `Displacement` dataclass, and `OperandLocator.__init__` by annotating `modrm`, `sib`, and `disp` as `T | None`.
+- Fixed `invalid-return-type` in `special_templates` by correcting its return annotation to `str | None`.
+
 ## [1.0.2] - 2026-06-08
 
 ### Added

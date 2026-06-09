@@ -41,9 +41,9 @@ class OperandParameterizer:
             B = prefix & 1
             X = (prefix & 2) >> 1
 
-        self.modrm: ModRm = None
-        self.sib: Sib = None
-        self.disp: Displacement = None
+        self.modrm: ModRm | None = None
+        self.sib: Sib | None = None
+        self.disp: Displacement | None = None
 
         if instr.modrm:
             self.modrm: ModRm = ModRm.from_instr(self._instr, R, B)
@@ -68,6 +68,7 @@ class OperandParameterizer:
         :param settings: Settings instance
         :return: (str) Parameterized pattern of the Mod R/M byte
         """
+        assert self.modrm is not None
         i = 0
         reg_op = self.locator.locate(OPERAND_MODRM_REG)
 
@@ -109,6 +110,7 @@ class OperandParameterizer:
         :param settings: Settings instance
         :return: (str) Parameterized pattern of the SIB byte
         """
+        assert self.sib is not None
         sib_op = self.locator.locate(OPERAND_SIB)
 
         if sib_op is None:
@@ -158,6 +160,7 @@ class OperandParameterizer:
         :param settings: Settings instance
         :return: (str) Parameterized pattern of the displacement value
         """
+        assert self.disp is not None
         disp_off = self._instr.disp_offset
         disp_size = self._instr.disp_size
 
@@ -165,6 +168,7 @@ class OperandParameterizer:
 
         if (
             rm_op
+            and self.modrm
             and self.modrm.is_mem_with_rm_base_reg_and_disp()
             and is_gp_reg(rm_op.mem.base)
             and settings.cGpDisplacementParam.checked
@@ -174,6 +178,7 @@ class OperandParameterizer:
 
         if (
             rm_op
+            and self.modrm
             and self.modrm.is_mem_with_rm_base_reg_and_disp()
             and is_stack_reg(rm_op.mem.base)
             and settings.cSDisplacementParam.checked
@@ -185,6 +190,7 @@ class OperandParameterizer:
 
         if (
             sib_op
+            and self.modrm
             and self.modrm.is_mem_with_sib_and_disp()
             and is_gp_reg(sib_op.mem.base)
             and settings.cGpDisplacementParam.checked
@@ -194,6 +200,7 @@ class OperandParameterizer:
 
         if (
             sib_op
+            and self.modrm
             and self.modrm.is_mem_with_sib_and_disp()
             and is_stack_reg(sib_op.mem.base)
             and settings.cSDisplacementParam.checked

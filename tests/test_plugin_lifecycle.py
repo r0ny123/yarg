@@ -12,6 +12,7 @@ class _FakeIdaApi(types.ModuleType):
     def __init__(self):
         super().__init__("ida_idaapi")
         self.PLUGIN_FIX = 1
+        self.PLUGIN_HIDE = 16
         self.PLUGIN_SKIP = -1
         self.PLUGIN_KEEP = 0
         self.IDA_SDK_VERSION = 930

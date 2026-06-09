@@ -35,6 +35,10 @@ jobs:
         ruff format --check .
         ruff check .
 
+    - name: Run ty type checks
+      run: |
+        ty check --python "$(which python)"
+
     - name: Compile plugin sources
       run: |
         python -m compileall -q yarg yarg.py

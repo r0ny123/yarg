@@ -7,19 +7,13 @@ from capstone import *
 
 from .operand import OperandParameterizer
 from .utils import SettingsDialog, get_bitness, dbg_print, TEMPLATE_SYMBOL
-
-
-@dataclass(frozen=True)
-class InstructionAnnotation:
-    ea: int
-    raw_bytes: str
-    disassembly: str
+from .yara_output import YaraInstructionComment
 
 
 @dataclass(frozen=True)
 class PatternResult:
     pattern: str
-    annotations: list[InstructionAnnotation]
+    annotations: list[YaraInstructionComment]
 
 
 def format_debug_table(headers, row) -> str:
@@ -30,7 +24,7 @@ def format_debug_table(headers, row) -> str:
     return f"{header_line}\n{separator}\n{row_line}"
 
 
-def special_templates(instr, dw_opcode, settings: SettingsDialog, db=None) -> str:
+def special_templates(instr, dw_opcode, settings: SettingsDialog, db=None) -> str | None:
     """
     Processing special opcodes
     :param instr:  Capstone instruction CsInsn
@@ -132,7 +126,7 @@ def create_pattern_from_code(md: Cs, code: bytes, addr: int, settings: SettingsD
         instr_template = ""
         instr_data = instr.bytes
         disassembly = f"{instr.mnemonic} {instr.op_str}".strip()
-        annotations.append(InstructionAnnotation(instr.address, instr_data.hex(), disassembly))
+        annotations.append(YaraInstructionComment(instr.address, instr_data.hex(), disassembly))
 
         instr_template_verb_hdr = ["legacy prefix", "rex", "opcode", "modrm", "sib", "disp", "imm"]
         instr_template_verb = [[]]

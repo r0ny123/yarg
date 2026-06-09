@@ -11,7 +11,7 @@ YARG_CLEANUP_ATTR = "_yarg_for_yara_cleanup"
 
 
 class YaraBuilder(ida_idaapi.plugin_t):
-    flags = ida_idaapi.PLUGIN_FIX
+    flags = ida_idaapi.PLUGIN_FIX | ida_idaapi.PLUGIN_HIDE
     help = f"YarG for Yara v{__ver_major__}.{__ver_minor__}. Create YARA rules/patterns from code"
     wanted_name = "YarG for Yara"
     wanted_hotkey = ""

@@ -22,8 +22,8 @@ class YaraRuleViewer(kw.PluginForm):
         editor = QtWidgets.QPlainTextEdit()
         editor.setReadOnly(True)
         editor.setPlainText(self._rule_text)
-        editor.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
-        editor.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
+        editor.setLineWrapMode(QtWidgets.QPlainTextEdit.LineWrapMode.NoWrap)
+        editor.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.SystemFont.FixedFont))
         layout.addWidget(editor)
         self._parent.setLayout(layout)
 

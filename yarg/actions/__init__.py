@@ -35,12 +35,12 @@ class Hooks(kw.UI_Hooks):
         super().__init__()
         self._actions_manager = actions_manager
 
-    def populating_widget_popup(self, widget, popup, ctx):
+    def populating_widget_popup(self, widget, popup_handle, ctx=None):
         if kw.get_widget_type(widget) not in (kw.BWN_DISASM, kw.BWN_DISASM_ARROWS):
             return
 
         for action_desc in self._actions_manager.actions:
-            kw.attach_action_to_popup(widget, popup, action_desc.name, POPUP_PATH)
+            kw.attach_action_to_popup(widget, popup_handle, action_desc.name, POPUP_PATH)
 
 
 class ActionsManager:

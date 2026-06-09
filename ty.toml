@@ -1,0 +1,8 @@
+[environment]
+python-version = "3.13"
+python = ".venv"
+
+[src]
+# Tests rely on heavy runtime monkey-patching of ModuleType objects;
+# those patterns are intentionally not statically typed.
+exclude = ["tests"]

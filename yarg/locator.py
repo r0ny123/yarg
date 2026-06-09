@@ -14,7 +14,7 @@ OPERAND_DISP = 4
 class OperandLocator:
     """Map capstone operands to raw operands"""
 
-    def __init__(self, instr, modrm: ModRm, sib: Sib, disp: Displacement):
+    def __init__(self, instr, modrm: ModRm | None, sib: Sib | None, disp: Displacement | None):
         self._instr = instr
 
         self._mapping = [None, None, None, None, None]
@@ -61,6 +61,7 @@ class OperandLocator:
                 and self._modrm
                 and self._modrm.is_mem_with_sib()
                 and not self.locate(OPERAND_SIB)
+                and self._sib
                 and self._sib.is_mem_with_base_reg()
             ):
                 base_size = get_reg_size(operand.mem.base) or get_bitness()
@@ -77,6 +78,7 @@ class OperandLocator:
                 and self._modrm
                 and self._modrm.is_mem_with_sib()
                 and not self.locate(OPERAND_SIB)
+                and self._sib
                 and self._sib.is_mem_with_only_index_disp_32()
             ):
                 index_size = get_reg_size(operand.mem.index) or get_bitness()

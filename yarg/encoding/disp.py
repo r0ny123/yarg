@@ -14,11 +14,11 @@ class Displacement:
     size: int
     data: bytes
 
-    modrm: ModRm
-    sib: Sib
+    modrm: ModRm | None
+    sib: Sib | None
 
     @classmethod
-    def from_instr(cls, instr, modrm: ModRm, sib: Sib) -> "Displacement":
+    def from_instr(cls, instr, modrm: ModRm | None, sib: Sib | None) -> "Displacement":
         data = instr.bytes[instr.disp_offset : instr.disp_offset + instr.disp_size]
         return cls(disp=instr.disp, modrm=modrm, sib=sib, offset=instr.disp_offset, size=instr.disp_size, data=data)
 
