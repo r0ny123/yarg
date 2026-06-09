@@ -1,6 +1,8 @@
 # YarG for Yara
 ## Yet another rule generator for Yara
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/r0ny123/yarg)
+
 IDAPython plugin for generating whole YARA rules/patterns from x86/x86-64 code. Operation called 'parameterization'
 applies to selected code/function. This operation finds alternatives for any possible operands and creates a pattern
 based on that information.
