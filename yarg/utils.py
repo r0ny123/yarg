@@ -89,23 +89,31 @@ REGISTER_LOOKUP_TABLE = {
 }
 
 
+def _compact_byte_alternatives(values, settings: SettingsDialog) -> str:
+    """Render a set of byte alternatives as the most compact *lossless* hex pattern.
+
+    A nibble may be wildcarded only when the alternatives actually span all 16 of its
+    values; otherwise the faithful alternation ``(AA|BB|...)`` is emitted. Folding to a
+    nibble wildcard when the set does not cover the full nibble (the previous behaviour)
+    silently widened the match into the neighbouring, held register field.
+    """
+    byte_values = sorted(dict.fromkeys(values))
+    high_nibbles = {value >> 4 for value in byte_values}
+    low_nibbles = {value & 0xF for value in byte_values}
+    full_nibble = set(range(16))
+
+    if settings.cFoldSameLow4bit.checked and len(high_nibbles) == 1 and low_nibbles == full_nibble:
+        return f"{next(iter(high_nibbles)):X}{TEMPLATE_SYMBOL}"
+
+    if settings.cFoldSameHigh4bit.checked and len(low_nibbles) == 1 and high_nibbles == full_nibble:
+        return f"{TEMPLATE_SYMBOL}{next(iter(low_nibbles)):X}"
+
+    return "(" + "|".join(f"{value:02X}" for value in byte_values) + ")"
+
+
 def generate_8bit_pattern_2_0_any(v_7_6, v_5_3, settings: SettingsDialog) -> str:
     cst_part = (v_7_6 << 6) | (v_5_3 << 3)
-
-    v = []
-    c = []
-
-    for i in range(0, 8):
-        candidate = f"{(cst_part | i):02X}"
-        if candidate[0] not in c:
-            c.append(candidate[0])
-
-        v.append(f"{(cst_part | i):02X}")
-
-    if len(c) == 1 and settings.cFoldSameLow4bit.checked:
-        return f"{c[0]}?"
-
-    return f"({'|'.join(v)})"
+    return _compact_byte_alternatives([cst_part | i for i in range(8)], settings)
 
 
 def generate_8bit_pattern_5_0_any(v_7_6, settings: SettingsDialog) -> str:
@@ -119,21 +127,7 @@ def generate_8bit_pattern_5_0_any(v_7_6, settings: SettingsDialog) -> str:
 
 def generate_8bit_pattern_5_3_any(v_7_6, v_2_0, settings: SettingsDialog) -> str:
     cst_part = (v_7_6 << 6) | v_2_0
-
-    v = []
-    c = []
-
-    for i in range(0, 8):
-        candidate = f"{(cst_part | (i << 3)):02X}"
-        if candidate[-1] not in c:
-            c.append(candidate[-1])
-
-        v.append(candidate)
-
-    if len(c) == 2 and settings.cFoldSameHigh4bit.checked:
-        return "(" + f"?{c[0]}|?{c[1]}" + ")"
-
-    return f"({'|'.join(v)})"
+    return _compact_byte_alternatives([cst_part | (i << 3) for i in range(8)], settings)
 
 
 def get_reg(reg_id, size, instr) -> Optional[int]:

@@ -121,6 +121,21 @@ def test_defensive_imm_and_disp_parameterization():
     assert disp4.parameterize_address(settings) == "????0304"
 
 
+def test_fold_does_not_overmatch_held_register_field():
+    # With folding enabled, a half-nibble set must stay a faithful alternation rather than
+    # collapsing to a nibble wildcard that would also match the neighbouring held field.
+    from yarg.utils import generate_8bit_pattern_2_0_any, generate_8bit_pattern_5_3_any
+
+    settings = SettingsDialog()
+    settings.cFoldSameLow4bit.checked = True
+    settings.cFoldSameHigh4bit.checked = True
+
+    # hold mod=3, reg=1 -> bytes C8..CF; "C?" would wrongly also match C0..C7 (reg=0).
+    assert generate_8bit_pattern_2_0_any(3, 1, settings) == "(C8|C9|CA|CB|CC|CD|CE|CF)"
+    # hold mod=3, rm=0 -> C0,C8,..,F8; "(?0|?8)" would wrongly also match mod != 3.
+    assert generate_8bit_pattern_5_3_any(3, 0, settings) == "(C0|C8|D0|D8|E0|E8|F0|F8)"
+
+
 def test_redundant_prefix_is_not_dropped():
     # capstone absorbs a redundant F3 prefix on `xchg ebx, eax` into neither prefix nor
     # opcode; the prefix length is decoded directly so the byte is still emitted.

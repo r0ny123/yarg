@@ -40,8 +40,12 @@ class CreatePatternFromSelectedInstructionHandler(kw.action_handler_t):
         if not settings.Execute():
             return 0
 
-        with current_database() as db:
-            result = create_pattern_from_code(md, code, ea, settings, db=db)
+        try:
+            with current_database() as db:
+                result = create_pattern_from_code(md, code, ea, settings, db=db)
+        except Exception as exc:
+            kw.warning(f"[YarG] Could not access the IDA database: {exc}")
+            return 0
 
         pattern = result.pattern
         if settings.cStripWildCards.checked:

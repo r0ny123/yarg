@@ -42,7 +42,7 @@ def pattern_to_regex(pattern: str) -> str | None:
     return "".join(out)
 
 
-def _finalize_instr_template(instr_template: str, instr_data: bytes) -> str:
+def _finalize_instr_template(instr_template: str, instr_data: bytes) -> tuple[str, bool]:
     """Guarantee a per-instruction template matches the instruction it was built from.
 
     A generated pattern must always match the bytes it describes. Disassembler metadata can
@@ -50,14 +50,16 @@ def _finalize_instr_template(instr_template: str, instr_data: bytes) -> str:
     the supported legacy ModR/M scheme (e.g. VEX/EVEX) are not modelled here; either can yield
     a template that does not match the instruction. When that happens, fall back to the literal
     instruction bytes, which match by definition.
+
+    Returns the finalized template and whether the literal fallback was used (the caller
+    aggregates fallbacks into a single message instead of printing once per instruction).
     """
     target = instr_data.hex().upper()
     regex = pattern_to_regex(instr_template)
     if regex is not None and re.fullmatch(regex, target):
-        return instr_template
+        return instr_template, False
 
-    print("[!] Generated pattern does not match its instruction bytes; falling back to literal bytes")
-    return target
+    return target, True
 
 
 def format_debug_table(headers, row) -> str:
@@ -166,6 +168,7 @@ def create_pattern_from_code(md: Cs, code: bytes, addr: int, settings: SettingsD
     """
     code_pattern = ""
     annotations = []
+    fallback_count = 0
     for instr in md.disasm(code, addr):
         instr_template = ""
         instr_data = instr.bytes
@@ -204,7 +207,9 @@ def create_pattern_from_code(md: Cs, code: bytes, addr: int, settings: SettingsD
         opcode_tempalte = special_templates(instr, dw_opcode, settings, db=db)
         if opcode_tempalte:
             instr_template += opcode_tempalte
-            code_pattern += _finalize_instr_template(instr_template, instr_data)
+            finalized, fell_back = _finalize_instr_template(instr_template, instr_data)
+            code_pattern += finalized
+            fallback_count += fell_back
             continue
 
         # No special actions need. Just copy opcodes.
@@ -259,6 +264,14 @@ def create_pattern_from_code(md: Cs, code: bytes, addr: int, settings: SettingsD
         dbg_print(format_debug_table(instr_template_verb_hdr, instr_template_verb[0]))
         dbg_print("--------------------------------------------------------------")
 
-        code_pattern += _finalize_instr_template(instr_template, instr_data)
+        finalized, fell_back = _finalize_instr_template(instr_template, instr_data)
+        code_pattern += finalized
+        fallback_count += fell_back
+
+    if fallback_count:
+        print(
+            f"[!] {fallback_count} instruction(s) could not be parameterized "
+            "(degenerate or unsupported encoding); emitted their literal bytes"
+        )
 
     return PatternResult(pattern=code_pattern, annotations=annotations)

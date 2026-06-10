@@ -161,8 +161,6 @@ class OperandParameterizer:
         :return: (str) Parameterized pattern of the displacement value
         """
         assert self.disp is not None
-        disp_off = self._instr.disp_offset
-        disp_size = self._instr.disp_size
 
         rm_op = self.locator.locate(OPERAND_MODRM_RM)
 
@@ -226,7 +224,9 @@ class OperandParameterizer:
             dbg_print("parameterize_disp(): sib_without_base (address)")
             return self.disp.parameterize_address(settings)
 
-        return hexlify(self._instr.bytes[disp_off : disp_off + disp_size]).decode("utf-8").upper()
+        # Use the clamped displacement bytes captured by Displacement rather than the raw
+        # instr.disp_size, so a bogus size reported by the disassembler cannot leak in here.
+        return self.disp.data.hex().upper()
 
     def parameterize_imm(self, settings: SettingsDialog):
         """

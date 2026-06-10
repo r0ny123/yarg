@@ -47,8 +47,10 @@ def close_all_viewers() -> None:
 def show_yara_rule(title: str, rule_text: str) -> None:
     title = _next_viewer_title(title)
     viewer = YaraRuleViewer(rule_text)
-    _open_viewers.append(viewer)
+    # Track the viewer only after Show succeeds so a failed Show does not leave a stale,
+    # never-closed entry in _open_viewers.
     viewer.Show(title, kw.PluginForm.WOPN_DP_TAB)
+    _open_viewers.append(viewer)
 
 
 def _next_viewer_title(title: str) -> str:

@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-06-10
+
+### Changed
+- Made ModR/M and SIB register parameterization folding lossless: alternatives are only collapsed to a nibble wildcard when they span the full nibble, so an enabled "fold same low/high 4 bits" option no longer silently widens a match into the adjacent, held register field.
+- Aggregated the literal-fallback notice in pattern generation into a single per-rule message instead of printing once per affected instruction.
+
+### Fixed
+- Hardened the rule-generation actions to surface a warning instead of an unhandled traceback if the IDA database cannot be opened.
+- Fixed the displacement parameterization fallback to use the clamped displacement bytes rather than the raw `instr.disp_size`, keeping it consistent with the size-clamping applied elsewhere.
+- Fixed a potential stale viewer entry by registering a generated rule viewer only after it is shown successfully.
+
 ## [1.0.4] - 2026-06-10
 
 ### Added
