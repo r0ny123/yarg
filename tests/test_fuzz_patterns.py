@@ -315,3 +315,91 @@ def test_disp_variants_self_match_source_bytes():
     for code, bits in cases:
         pat = _patternize(code, _disp_settings(), bits=bits)
         assert re.fullmatch(_pattern_to_regex(pat), code.hex().upper()), (code, pat)
+
+
+# --- R2: accumulator short/generic encoding variants (cAccumulatorEncodingVariants) ------
+
+
+def _accum_settings(on: bool = True) -> SettingsDialog:
+    """Settings for accumulator variant tests: all immediate wildcarding OFF so strings are deterministic."""
+    s = SettingsDialog()
+    s.cAccumulatorEncodingVariants.checked = on
+    s.cImmediateParam.checked = False
+    s.cGpImmParam.checked = False
+    s.cSImmParam.checked = False
+    s.cBranchEncodingVariants.checked = False
+    s.cStackDispSizeVariants.checked = False
+    s.cRexOperandSizeFixed.checked = False
+    return s
+
+
+def test_accum_add_eax_imm32_emits_three_forms():
+    # add eax,0x10 (05 10 00 00 00) -> native | 81 /0 | 83 /0  (0x10 fits int8)
+    pat = _patternize(b"\x05\x10\x00\x00\x00", _accum_settings(), bits=32)
+    assert pat == "(0510000000|81C010000000|83C010)"
+
+
+def test_accum_add_al_imm8_emits_two_forms():
+    # add al,5 (04 05) -> native | 80 /0
+    pat = _patternize(b"\x04\x05", _accum_settings(), bits=32)
+    assert pat == "(0405|80C005)"
+
+
+def test_accum_test_eax_imm32_emits_two_forms_no_83():
+    # test eax,0x10 (A9 10 00 00 00) -> native | F7 /0  (TEST has no 83 form)
+    pat = _patternize(b"\xa9\x10\x00\x00\x00", _accum_settings(), bits=32)
+    assert pat == "(A910000000|F7C010000000)"
+
+
+def test_accum_test_al_imm8_emits_two_forms():
+    # test al,5 (A8 05) -> native | F6 /0
+    pat = _patternize(b"\xa8\x05", _accum_settings(), bits=32)
+    assert pat == "(A805|F6C005)"
+
+
+def test_accum_add_rax_rex_w_emits_alternation_inside_rex_template():
+    # add rax,0x10 (48 05 10 00 00 00) -> REX nibble-wildcard wraps the alternation
+    pat = _patternize(b"\x48\x05\x10\x00\x00\x00", _accum_settings(), bits=64)
+    assert pat == "4?(0510000000|81C010000000|83C010)"
+
+
+def test_accum_cmp_al_imm8_uses_correct_modrm_digit():
+    # cmp al,5 (3C 05) -> generic uses 80 /7 = 80 F8; digit=7 -> ModRM=0xC0|(7<<3)=0xF8
+    pat = _patternize(b"\x3c\x05", _accum_settings(), bits=32)
+    assert pat == "(3C05|80F805)"
+
+
+def test_accum_cmp_eax_imm32_three_forms():
+    # cmp eax,0x10 (3D 10 00 00 00) -> native | 81 /7 | 83 /7
+    pat = _patternize(b"\x3d\x10\x00\x00\x00", _accum_settings(), bits=32)
+    assert pat == "(3D10000000|81F810000000|83F810)"
+
+
+def test_accum_zbit_large_imm_has_no_83_form():
+    # sub eax,0x200 (2D 00 02 00 00) -> 0x200=512 does not fit int8 -> no 83 form
+    pat = _patternize(b"\x2d\x00\x02\x00\x00", _accum_settings(), bits=32)
+    assert pat == "(2D00020000|81E800020000)"
+
+
+def test_accum_disabled_emits_single_encoding():
+    # With the setting off, only the native form is emitted (no alternation, no parens).
+    assert _patternize(b"\x04\x05", _accum_settings(on=False), bits=32) == "0405"
+    assert _patternize(b"\x05\x10\x00\x00\x00", _accum_settings(on=False), bits=32) == "0510000000"
+    assert _patternize(b"\xa9\x10\x00\x00\x00", _accum_settings(on=False), bits=32) == "A910000000"
+
+
+def test_accum_variants_self_match_source_bytes():
+    # The native form must match its own source bytes for every case.
+    cases = [
+        (b"\x04\x05", 32),            # add al, 5
+        (b"\x05\x10\x00\x00\x00", 32),  # add eax, 0x10
+        (b"\xa8\x05", 32),            # test al, 5
+        (b"\xa9\x10\x00\x00\x00", 32),  # test eax, 0x10
+        (b"\x3c\x05", 32),            # cmp al, 5
+        (b"\x3d\x10\x00\x00\x00", 32),  # cmp eax, 0x10
+        (b"\x48\x05\x10\x00\x00\x00", 64),  # add rax, 0x10
+        (b"\x2d\x00\x02\x00\x00", 32),  # sub eax, 0x200 (no 83 form)
+    ]
+    for code, bits in cases:
+        pat = _patternize(code, _accum_settings(), bits=bits)
+        assert re.fullmatch(_pattern_to_regex(pat), code.hex().upper()), (code.hex(), pat)

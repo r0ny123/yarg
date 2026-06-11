@@ -30,6 +30,7 @@ class SettingsDialog:
         self.cAtomGovernor = _CheckControl()
         self.cRexOperandSizeFixed = _CheckControl()
         self.cStackDispSizeVariants = _CheckControl()
+        self.cAccumulatorEncodingVariants = _CheckControl()
         self.cTrackBasicBlockSequences = _CheckControl()
         self.cImmediateParam = _CheckControl()
         self.cGpImmParam = _CheckControl()
@@ -125,6 +126,7 @@ class SettingsDialog:
                     ("Atom governor (keep a fixed-byte anchor per block)", self.cAtomGovernor),
                     ("Hold REX.W fixed (operand-size precise)", self.cRexOperandSizeFixed),
                     ("Stack-frame disp8/disp32 size variants", self.cStackDispSizeVariants),
+                    ("Accumulator short/generic encoding variants", self.cAccumulatorEncodingVariants),
                 ],
             ),
             self._checkbox_group(
@@ -182,6 +184,7 @@ class SettingsDialog:
         self.cAtomGovernor.checked = True
         self.cRexOperandSizeFixed.checked = True
         self.cStackDispSizeVariants.checked = True
+        self.cAccumulatorEncodingVariants.checked = True
         self.cSDisplacementParam.checked = True
         self.check_all_gp(self.is_gp_enabled)
         self.check_all_sp(self.is_sp_enabled)

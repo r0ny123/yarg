@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from capstone import *
 
 
+from capstone.x86_const import X86_OP_REG
+
 from .operand import OperandParameterizer
-from .utils import SettingsDialog, get_bitness, dbg_print, TEMPLATE_SYMBOL
+from .utils import SettingsDialog, get_bitness, dbg_print, TEMPLATE_SYMBOL, is_gp_reg, is_stack_reg
 from .yara_output import YaraInstructionComment, pattern_atom_ok
 
 
@@ -115,6 +117,136 @@ def _short_jcc_from_near(near_second_opcode: int) -> str:
     return f"{0x70 + (near_second_opcode - 0x80):02X}"
 
 
+# Opcode-to-ModRM-reg-digit mapping for the ALU accumulator short forms.
+# The digit encodes the operation in the ModRM reg field: ADD=0 OR=1 ADC=2 SBB=3 AND=4 SUB=5 XOR=6 CMP=7.
+_ACCUM_8BIT_OPCODE_DIGIT: dict[int, int] = {
+    0x04: 0,  # ADD AL, imm8
+    0x0C: 1,  # OR  AL, imm8
+    0x14: 2,  # ADC AL, imm8
+    0x1C: 3,  # SBB AL, imm8
+    0x24: 4,  # AND AL, imm8
+    0x2C: 5,  # SUB AL, imm8
+    0x34: 6,  # XOR AL, imm8
+    0x3C: 7,  # CMP AL, imm8
+}
+_ACCUM_ZBIT_OPCODE_DIGIT: dict[int, int] = {
+    0x05: 0,  # ADD eAX/rAX, imm(z)
+    0x0D: 1,  # OR  eAX/rAX, imm(z)
+    0x15: 2,  # ADC eAX/rAX, imm(z)
+    0x1D: 3,  # SBB eAX/rAX, imm(z)
+    0x25: 4,  # AND eAX/rAX, imm(z)
+    0x2D: 5,  # SUB eAX/rAX, imm(z)
+    0x35: 6,  # XOR eAX/rAX, imm(z)
+    0x3D: 7,  # CMP eAX/rAX, imm(z)
+}
+
+
+def _accum_imm_template(instr, settings: SettingsDialog, width: int) -> str:
+    """Build the immediate template for an accumulator short-form instruction.
+
+    When ``width`` equals ``instr.imm_size`` this simply delegates to
+    ``OperandParameterizer.parameterize_imm``. When ``width`` is 1 (the sign-extended
+    imm8 form inside the 83-group) and parameterization is active, a single ``??`` is
+    returned; otherwise the low byte of the immediate is emitted as a literal hex pair.
+    """
+    if width == instr.imm_size:
+        return OperandParameterizer(instr).parameterize_imm(settings)
+
+    # width == 1, alternate (83) sign-extended form: use the low byte of the immediate.
+    imm_offset = instr.imm_offset
+    imm_data = instr.bytes[imm_offset : imm_offset + instr.imm_size]
+    # Check whether imm is wildcarded by the caller's settings.
+    if settings.cImmediateParam.checked:
+        return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}"
+    # Check GP or SP parameterization: for the accumulator short form there is no ModRM
+    # reg/rm field, so we check the actual register operand from capstone's operand list.
+    for op in instr.operands:
+        if op.type == X86_OP_REG:
+            if is_stack_reg(op.reg) and settings.cSImmParam.checked:
+                return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}"
+            if is_gp_reg(op.reg) and settings.cGpImmParam.checked:
+                return f"{TEMPLATE_SYMBOL}{TEMPLATE_SYMBOL}"
+    # Literal: the low byte of the full immediate.
+    return f"{imm_data[0]:02X}"
+
+
+def _with_accum_variant(instr, native_opcode: str, settings: SettingsDialog, db=None) -> str:
+    """Emit an accumulator short-form encoding paired with its generic ModRM alternate(s).
+
+    For 8-bit forms (AL, imm8) the single alternate is ``80 /digit imm8``.
+    For z-bit forms (eAX/rAX, imm(z)) two alternates are emitted:
+      - ``81 /digit imm(z)``  (always)
+      - ``83 /digit imm8``    (only when the immediate fits in a signed int8)
+    TEST (A8/A9) maps to F6/F7 /0 instead of 80/81 and has no 83 form.
+
+    If any alternate cannot be constructed safely, the native single encoding is returned
+    (invariant preserved). If the setting is off, the native single encoding with the
+    immediate appended is returned.
+    """
+    # Build the immediate template first — needed both for the native-only and alternation paths.
+    try:
+        op_param = OperandParameterizer(instr, db=db)
+        imm_t = op_param.parameterize_imm(settings)
+    except Exception:
+        # Fall back to the literal bytes; the caller's _finalize_instr_template will validate.
+        imm_offset = instr.imm_offset
+        imm_data = instr.bytes[imm_offset : imm_offset + instr.imm_size]
+        imm_t = imm_data.hex().upper()
+
+    dw_opcode = unpack("<I", bytes(instr.opcode))[0]
+    native = native_opcode + imm_t
+
+    if not settings.cAccumulatorEncodingVariants.checked:
+        return native
+
+    # --- 8-bit forms (AL, imm8) ---
+    if dw_opcode in _ACCUM_8BIT_OPCODE_DIGIT:
+        digit = _ACCUM_8BIT_OPCODE_DIGIT[dw_opcode]
+        modrm = 0xC0 | (digit << 3)
+        alt = f"80{modrm:02X}{imm_t}"
+        return f"({native}|{alt})"
+
+    # TEST AL, imm8 (A8) -> generic F6 /0 (ModRM C0)
+    if dw_opcode == 0xA8:
+        alt = f"F6C0{imm_t}"
+        return f"({native}|{alt})"
+
+    # --- z-bit forms (eAX/rAX, imm(z)) ---
+    if dw_opcode in _ACCUM_ZBIT_OPCODE_DIGIT:
+        digit = _ACCUM_ZBIT_OPCODE_DIGIT[dw_opcode]
+        modrm = 0xC0 | (digit << 3)
+        alt81 = f"81{modrm:02X}{imm_t}"
+        alts = [native, alt81]
+
+        # Sign-extended imm8 form (83-group): only when value fits in signed int8.
+        # Use the raw immediate value; capstone sign-extends to int64 for signed imms.
+        imm_offset = instr.imm_offset
+        imm_data = instr.bytes[imm_offset : imm_offset + instr.imm_size]
+        if imm_data:
+            raw_val = int.from_bytes(imm_data, "little")
+            # Treat as signed (two's complement for the native width).
+            signed_val = raw_val if raw_val < (1 << (instr.imm_size * 8 - 1)) else raw_val - (1 << (instr.imm_size * 8))
+            include_83 = -128 <= signed_val <= 127
+            if not include_83 and settings.cImmediateParam.checked:
+                # Immediate is wildcarded: we can't rule out a value that fits int8 at
+                # runtime, so always include the 83 form for correctness.
+                include_83 = True
+            if include_83:
+                imm8_t = _accum_imm_template(instr, settings, 1)
+                alt83 = f"83{modrm:02X}{imm8_t}"
+                alts.append(alt83)
+
+        return "(" + "|".join(alts) + ")"
+
+    # TEST eAX/rAX, imm(z) (A9) -> generic F7 /0 (ModRM C0); no 83 form.
+    if dw_opcode == 0xA9:
+        alt = f"F7C0{imm_t}"
+        return f"({native}|{alt})"
+
+    # Unrecognised opcode in this path: return the native (opcode + imm) string.
+    return native
+
+
 def _with_branch_variant(native: str, alternate: str, settings: SettingsDialog, has_legacy_prefix: bool) -> str:
     """Pair an encoding with its short<->near counterpart as a lossless YARA alternation.
 
@@ -217,6 +349,17 @@ def special_templates(instr, dw_opcode, settings: SettingsDialog, db=None, has_l
     if dw_opcode == 0xE9:
         native = "E9" + _offset_body(instr, settings.offset_parameterization_mode)
         return _with_branch_variant(native, "EB??", settings, has_legacy_prefix)
+
+    # Accumulator short-form ALU/TEST instructions (04..3D, A8/A9):
+    # emit the native opcode string and let _with_accum_variant append the immediate and
+    # any alternate(s). The opcode is a single literal byte here.
+    if dw_opcode in _ACCUM_8BIT_OPCODE_DIGIT or dw_opcode == 0xA8:
+        native_opcode = f"{dw_opcode:02X}"
+        return _with_accum_variant(instr, native_opcode, settings, db=db)
+
+    if dw_opcode in _ACCUM_ZBIT_OPCODE_DIGIT or dw_opcode == 0xA9:
+        native_opcode = f"{dw_opcode:02X}"
+        return _with_accum_variant(instr, native_opcode, settings, db=db)
 
 
 def create_pattern_from_code(md: Cs, code: bytes, addr: int, settings: SettingsDialog, db=None) -> PatternResult:
