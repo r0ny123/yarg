@@ -27,6 +27,7 @@ class SettingsDialog:
         self.cFoldSameLow4bit = _CheckControl()
         self.cStripWildCards = _CheckControl()
         self.cBranchEncodingVariants = _CheckControl()
+        self.cWeightedBlockVoting = _CheckControl()
         self.cAtomGovernor = _CheckControl()
         self.cRexOperandSizeFixed = _CheckControl()
         self.cStackDispSizeVariants = _CheckControl()
@@ -123,6 +124,7 @@ class SettingsDialog:
                     ("Alternatives with same high 4 bits are folding", self.cFoldSameHigh4bit),
                     ("Strip trailing wildcards", self.cStripWildCards),
                     ("Branch short/near encoding variants", self.cBranchEncodingVariants),
+                    ("Weighted block voting (strong blocks only)", self.cWeightedBlockVoting),
                     ("Atom governor (keep a fixed-byte anchor per block)", self.cAtomGovernor),
                     ("Hold REX.W fixed (operand-size precise)", self.cRexOperandSizeFixed),
                     ("Stack-frame disp8/disp32 size variants", self.cStackDispSizeVariants),
@@ -181,6 +183,7 @@ class SettingsDialog:
         self.cSImmParam.checked = True
         self.cStripWildCards.checked = True
         self.cBranchEncodingVariants.checked = True
+        self.cWeightedBlockVoting.checked = True
         self.cAtomGovernor.checked = True
         self.cRexOperandSizeFixed.checked = True
         self.cStackDispSizeVariants.checked = True

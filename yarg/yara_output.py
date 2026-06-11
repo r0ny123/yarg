@@ -200,11 +200,22 @@ def build_function_rule(
     block_patterns: Iterable[tuple[int, str, Sequence[YaraInstructionComment]]],
     bitness: int,
     var_prefix: str,
+    weighted_voting: bool = False,
+    min_atom: int = 2,
 ) -> str:
-    patterns = [
+    all_patterns = [
         YaraBytePattern(f"{var_prefix}{format_rule_address(block_ea, bitness)}", pattern, annotations)
         for block_ea, pattern, annotations in block_patterns
     ]
+
+    if weighted_voting:
+        strong = [p for p in all_patterns if pattern_atom_ok(p.pattern, min_atom)]
+        if strong:
+            patterns = strong
+        else:
+            patterns = all_patterns
+    else:
+        patterns = all_patterns
 
     half_plus_one = (len(patterns) // 2) + 1
     required = min(half_plus_one + half_plus_one // 2, len(patterns))

@@ -237,3 +237,91 @@ def test_pattern_atom_ok_threshold():
     assert not pattern_atom_ok("E8????")    # only a 1-byte opcode anchor
     assert not pattern_atom_ok("(EB??|E9????)")
     assert pattern_atom_ok("8B", min_atom=1)
+
+
+# ---------------------------------------------------------------------------
+# R7: weighted_voting tests
+# ---------------------------------------------------------------------------
+
+def test_weighted_voting_drops_weak_keeps_strong():
+    # 558BEC is strong (3-byte fixed run); C3 is weak (1-byte fixed run).
+    # With weighted_voting=True only the strong block should be emitted and
+    # the condition should reflect the strong-only count (1 of ...).
+    rule = build_function_rule(
+        0x401000,
+        [
+            (0x401000, "558BEC", ANNOTATIONS),
+            (0x401010, "C3", [YaraInstructionComment(0x401010, "c3", "ret")]),
+        ],
+        32,
+        "code_at_",
+        weighted_voting=True,
+    )
+
+    assert "$code_at_00401000" in rule          # strong block present
+    assert "$code_at_00401010" not in rule       # weak block dropped
+    assert "1 of ($code_at_*)" in rule           # threshold over 1 strong block
+    yara_x.compile(rule)
+
+
+def test_weighted_voting_all_weak_falls_back_to_flat():
+    # Both blocks are weak (single-byte patterns).  Fall-back: emit all with
+    # the flat formula.  2 blocks → half_plus_one=2, required=min(3,2)=2.
+    rule = build_function_rule(
+        0x401000,
+        [
+            (0x401000, "90", [YaraInstructionComment(0x401000, "90", "nop")]),
+            (0x401001, "C3", [YaraInstructionComment(0x401001, "c3", "ret")]),
+        ],
+        32,
+        "code_at_",
+        weighted_voting=True,
+    )
+
+    assert "$code_at_00401000" in rule           # both blocks present
+    assert "$code_at_00401001" in rule
+    assert "2 of ($code_at_*)" in rule           # flat threshold for 2 blocks
+    yara_x.compile(rule)
+
+
+def test_weighted_voting_false_identical_to_default():
+    # Explicitly passing weighted_voting=False must produce the same output as
+    # calling with no extra args (the legacy flat behavior).
+    blocks = [
+        (0x401000, "558BEC", ANNOTATIONS),
+        (0x401010, "C3", [YaraInstructionComment(0x401010, "c3", "ret")]),
+    ]
+    rule_default = build_function_rule(0x401000, blocks, 32, "code_at_")
+    rule_explicit = build_function_rule(0x401000, blocks, 32, "code_at_", weighted_voting=False)
+
+    assert rule_default == rule_explicit
+    # Both blocks are emitted and the condition covers the full set.
+    assert "$code_at_00401000" in rule_default
+    assert "$code_at_00401010" in rule_default
+    assert "2 of ($code_at_*)" in rule_default
+    yara_x.compile(rule_default)
+
+
+def test_weighted_voting_multiple_strong_threshold():
+    # 3 strong blocks, 2 weak blocks.
+    # Weighted path keeps 3 strong blocks.
+    # half_plus_one = (3//2)+1 = 2 ; required = min(2 + 2//2, 3) = min(3, 3) = 3
+    strong_block = "558BEC"   # 3-byte fixed run — strong
+    weak_block = "C3"         # 1-byte fixed run — weak
+
+    blocks = [
+        (0x401000, strong_block, [YaraInstructionComment(0x401000, "558bec", "push rbp")]),
+        (0x401010, strong_block, [YaraInstructionComment(0x401010, "558bec", "push rbp")]),
+        (0x401020, strong_block, [YaraInstructionComment(0x401020, "558bec", "push rbp")]),
+        (0x401030, weak_block,   [YaraInstructionComment(0x401030, "c3", "ret")]),
+        (0x401040, weak_block,   [YaraInstructionComment(0x401040, "c3", "ret")]),
+    ]
+    rule = build_function_rule(0x401000, blocks, 32, "code_at_", weighted_voting=True)
+
+    assert "$code_at_00401000" in rule
+    assert "$code_at_00401010" in rule
+    assert "$code_at_00401020" in rule
+    assert "$code_at_00401030" not in rule       # weak — dropped
+    assert "$code_at_00401040" not in rule       # weak — dropped
+    assert "3 of ($code_at_*)" in rule
+    yara_x.compile(rule)
