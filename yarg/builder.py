@@ -301,9 +301,9 @@ def _rex_template(rex: int, settings: SettingsDialog) -> str:
     64-bit-operand (W=1) instruction with its 32-bit-operand (W=0) cousin.
 
     When ``cRexOperandSizeFixed`` is on we keep R/X/B free (8 combinations) but hold W fixed
-    to its observed value. There is no single hex wildcard for "top bit of a nibble fixed",
-    so we emit an 8-way alternation of the concrete low-nibble hex digits whose bit3 equals
-    observed W: W=1 -> ``4(8|9|A|B|C|D|E|F)``, W=0 -> ``4(0|1|2|3|4|5|6|7)``. This never
+    to its observed value. YARA hex alternatives are whole bytes (a bare nibble is not a valid
+    token), so we enumerate the eight concrete REX bytes whose W bit matches the observed one:
+    W=1 -> ``(48|49|4A|4B|4C|4D|4E|4F)``, W=0 -> ``(40|41|42|43|44|45|46|47)``. This never
     reduces recall across compiler/optimization variation (W tracks source operand size, not
     codegen choice); it only stops matching the operand-size cousin.
     """
@@ -312,7 +312,8 @@ def _rex_template(rex: int, settings: SettingsDialog) -> str:
         return f"{high:1X}{TEMPLATE_SYMBOL}"
     w = (rex >> 3) & 1
     low_values = range(8, 16) if w else range(0, 8)
-    return f"{high:1X}(" + "|".join(f"{value:X}" for value in low_values) + ")"
+    base = high << 4
+    return "(" + "|".join(f"{base | low:02X}" for low in low_values) + ")"
 
 
 def format_debug_table(headers, row) -> str:
@@ -366,12 +367,12 @@ def special_templates(
     # Jcc rel8 (7x); pair with the rel32 (0F 8x) near form
     if 0x70 <= dw_opcode <= 0x7F:
         native = f"{instr.opcode[0]:02X}??"
-        near = f"{_near_jcc_from_short(instr.opcode[0])}????"
+        near = f"{_near_jcc_from_short(instr.opcode[0])}????????"
         return _with_branch_variant(native, near, settings, has_legacy_prefix)
 
     # JMP rel8 (EB); pair with the rel32 (E9) near form
     if dw_opcode == 0xEB:
-        return _with_branch_variant("EB??", "E9????", settings, has_legacy_prefix)
+        return _with_branch_variant("EB??", "E9????????", settings, has_legacy_prefix)
 
     # JMP rel16/32 (E9); pair with the rel8 (EB) short form
     if dw_opcode == 0xE9:

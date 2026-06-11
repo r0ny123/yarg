@@ -56,9 +56,10 @@ def longest_fixed_run(pattern: str) -> int:
     """Length, in bytes, of the longest run of fully-fixed bytes in a YARA hex pattern.
 
     Approximates the strongest *atom* YARA can extract for fast Aho-Corasick prefiltering.
-    A byte containing ``?`` and an alternation group ``(...)`` both break the run: neither
-    yields a single fixed substring usable as a global atom. A pattern whose longest run is
-    below ~2 bytes forces YARA into a slow full scan (and may be rejected as too generic).
+    A byte containing ``?``, an alternation group ``(...)``, or a jump token ``[m-n]`` all
+    break the run: none yields a single fixed substring usable as a global atom. A pattern
+    whose longest run is below ~2 bytes forces YARA into a slow full scan (and may be rejected
+    as too generic).
     """
     best = current = 0
     i, n = 0, len(pattern)
@@ -69,6 +70,11 @@ def longest_fixed_run(pattern: str) -> int:
             while i < n and depth:
                 depth += (pattern[i] == "(") - (pattern[i] == ")")
                 i += 1
+            current = 0
+            continue
+        if pattern[i] == "[":
+            close = pattern.find("]", i)
+            i = close + 1 if close != -1 else i + 1
             current = 0
             continue
         byte = pattern[i : i + 2]
