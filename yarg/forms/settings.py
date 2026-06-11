@@ -32,6 +32,7 @@ class SettingsDialog:
         self.cRexOperandSizeFixed = _CheckControl()
         self.cStackDispSizeVariants = _CheckControl()
         self.cAccumulatorEncodingVariants = _CheckControl()
+        self.cInterInstructionGaps = _CheckControl()
         self.cTrackBasicBlockSequences = _CheckControl()
         self.cImmediateParam = _CheckControl()
         self.cGpImmParam = _CheckControl()
@@ -129,6 +130,7 @@ class SettingsDialog:
                     ("Hold REX.W fixed (operand-size precise)", self.cRexOperandSizeFixed),
                     ("Stack-frame disp8/disp32 size variants", self.cStackDispSizeVariants),
                     ("Accumulator short/generic encoding variants", self.cAccumulatorEncodingVariants),
+                    ("Inter-instruction gap wildcards (tolerate inserted NOPs/padding)", self.cInterInstructionGaps),
                 ],
             ),
             self._checkbox_group(

@@ -17,6 +17,9 @@ from .yara_output import YaraInstructionComment, pattern_atom_ok
 # (2E, 36, 3E, 26, 64, 65), and operand/address-size overrides (66, 67).
 LEGACY_PREFIX_BYTES = frozenset({0xF0, 0xF2, 0xF3, 0x2E, 0x36, 0x3E, 0x26, 0x64, 0x65, 0x66, 0x67})
 
+# Maximum bytes for the inter-instruction gap wildcard token ``[0-K]``.
+INTER_INSTRUCTION_GAP = 4
+
 
 @dataclass(frozen=True)
 class PatternResult:
@@ -27,18 +30,41 @@ class PatternResult:
 def pattern_to_regex(pattern: str) -> str | None:
     """Translate a generated YARA hex pattern into a regex over an uppercase hex dump.
 
-    Hex nibbles map to themselves, ``?`` to a single hex-nibble class, and ``(a|b|...)``
-    alternation groups pass through unchanged. Returns ``None`` if the pattern contains an
-    unexpected character, which the caller treats as a non-match.
+    Hex nibbles map to themselves, ``?`` to a single hex-nibble class, ``(a|b|...)``
+    alternation groups pass through unchanged, and ``[m-n]`` bounded jump tokens map to
+    ``[0-9A-F]{2m,2n}`` (each skipped byte is two hex digits). Returns ``None`` if the
+    pattern contains an unexpected character, which the caller treats as a non-match.
     """
     out = []
-    for char in pattern:
+    i = 0
+    n = len(pattern)
+    while i < n:
+        char = pattern[i]
         if char in "0123456789abcdefABCDEF":
             out.append(char.upper())
+            i += 1
         elif char == "?":
             out.append("[0-9A-F]")
+            i += 1
         elif char in "(|)":
             out.append(char)
+            i += 1
+        elif char == "[":
+            # Parse a bounded jump token [m-n].
+            close = pattern.find("]", i)
+            if close == -1:
+                return None
+            token = pattern[i + 1 : close]
+            if "-" not in token:
+                return None
+            parts = token.split("-", 1)
+            try:
+                lo = int(parts[0])
+                hi = int(parts[1])
+            except ValueError:
+                return None
+            out.append(f"[0-9A-F]{{{2 * lo},{2 * hi}}}")
+            i = close + 1
         else:
             return None
     return "".join(out)
@@ -492,5 +518,16 @@ def create_pattern_from_code(md: Cs, code: bytes, addr: int, settings: SettingsD
     if settings.cAtomGovernor.checked:
         parts = _enforce_block_atom(parts)
 
-    code_pattern = "".join(template for template, _ in parts)
+    gap_token = f"[0-{INTER_INSTRUCTION_GAP}]"
+    if settings.cInterInstructionGaps.checked and len(parts) >= 2:
+        # Insert a bounded gap token BETWEEN consecutive instructions only.
+        # Never at the start or the end — yara_x forbids leading/trailing jumps.
+        templates = [template for template, _ in parts]
+        code_pattern = gap_token.join(templates)
+        # Sanity: no jump at start or end, no two adjacent jumps.
+        assert not code_pattern.startswith("["), "gap token must not be at the start"
+        assert not code_pattern.endswith("]"), "gap token must not be at the end"
+        assert "]]" not in code_pattern, "adjacent gap tokens are not allowed"
+    else:
+        code_pattern = "".join(template for template, _ in parts)
     return PatternResult(pattern=code_pattern, annotations=annotations)

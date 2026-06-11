@@ -28,9 +28,9 @@ sys.modules["ida_domain"] = MagicMock()
 
 from capstone import Cs, CS_ARCH_X86, CS_MODE_32, CS_MODE_64
 
-from yarg.builder import create_pattern_from_code
+from yarg.builder import create_pattern_from_code, INTER_INSTRUCTION_GAP
 from yarg.utils import SettingsDialog
-from yarg.yara_output import pattern_atom_ok
+from yarg.yara_output import pattern_atom_ok, build_yara_rule, YaraBytePattern
 
 _HEX = set("0123456789ABCDEFabcdef")
 
@@ -42,13 +42,35 @@ def _set_bitness(bits):
 
 def _pattern_to_regex(pattern: str) -> str:
     out = []
-    for ch in pattern:
+    i = 0
+    n = len(pattern)
+    while i < n:
+        ch = pattern[i]
         if ch in _HEX:
             out.append(ch.upper())
+            i += 1
         elif ch == "?":
             out.append("[0-9A-F]")
+            i += 1
         elif ch in "(|)":
             out.append(ch)
+            i += 1
+        elif ch == "[":
+            # Parse a bounded jump token [m-n] and emit [0-9A-F]{2m,2n}.
+            close = pattern.find("]", i)
+            if close == -1:
+                raise AssertionError(f"unclosed '[' in pattern {pattern!r}")
+            token = pattern[i + 1 : close]
+            if "-" not in token:
+                raise AssertionError(f"unexpected '[' token {token!r} in pattern {pattern!r}")
+            parts = token.split("-", 1)
+            try:
+                lo = int(parts[0])
+                hi = int(parts[1])
+            except ValueError as exc:
+                raise AssertionError(f"non-integer jump bounds in {token!r}") from exc
+            out.append(f"[0-9A-F]{{{2 * lo},{2 * hi}}}")
+            i = close + 1
         else:
             raise AssertionError(f"unexpected character {ch!r} in pattern {pattern!r}")
     return "".join(out)
@@ -403,3 +425,115 @@ def test_accum_variants_self_match_source_bytes():
     for code, bits in cases:
         pat = _patternize(code, _accum_settings(), bits=bits)
         assert re.fullmatch(_pattern_to_regex(pat), code.hex().upper()), (code.hex(), pat)
+
+
+# --- R5: inter-instruction gap wildcards (cInterInstructionGaps) --------------------------
+
+_GAP = f"[0-{INTER_INSTRUCTION_GAP}]"
+
+
+def _gap_settings(gaps: bool = True) -> SettingsDialog:
+    """Minimal settings for gap tests: no extra parameterization so patterns are deterministic."""
+    s = SettingsDialog()
+    s.cInterInstructionGaps.checked = gaps
+    s.cBranchEncodingVariants.checked = False
+    s.cStackDispSizeVariants.checked = False
+    s.cRexOperandSizeFixed.checked = False
+    s.cAtomGovernor.checked = False
+    return s
+
+
+def test_gap_on_inserts_token_between_instructions():
+    # Three 1-byte instructions: NOP NOP NOP (90 90 90).
+    # With gaps on the pattern should be "90[0-4]90[0-4]90" — token between each pair, not at ends.
+    pat = _patternize(b"\x90\x90\x90", _gap_settings(gaps=True), bits=32)
+    assert pat == f"90{_GAP}90{_GAP}90", repr(pat)
+    # Token appears between instructions, not at start or end.
+    assert not pat.startswith("[")
+    assert not pat.endswith("]")
+    # Exactly two gap tokens for three instructions.
+    assert pat.count(_GAP) == 2
+
+
+def test_gap_off_produces_no_token():
+    # Gaps off: pattern is byte-identical to today (no '[' at all).
+    pat = _patternize(b"\x90\x90\x90", _gap_settings(gaps=False), bits=32)
+    assert pat == "909090"
+    assert "[" not in pat
+
+
+def test_gap_single_instruction_no_token():
+    # A single instruction must never get a gap token regardless of the setting.
+    pat = _patternize(b"\x90", _gap_settings(gaps=True), bits=32)
+    assert "[" not in pat
+
+
+def test_gap_pattern_self_matches_gapless_source():
+    # The gapless source hex must full-match the gapped pattern (gap=0 via {0,...}).
+    # 3-instruction block: NOP, NOP, NOP.
+    code = b"\x90\x90\x90"
+    pat = _patternize(code, _gap_settings(gaps=True), bits=32)
+    source_hex = code.hex().upper()
+    regex = _pattern_to_regex(pat)
+    assert re.fullmatch(regex, source_hex), (pat, regex, source_hex)
+
+
+def test_gapped_rule_compiles_via_yara_x():
+    # A YARA rule containing a [0-4] jump token must compile without error.
+    code = b"\x90\x90\x90"
+    pat = _patternize(code, _gap_settings(gaps=True), bits=32)
+    # Sanity: pattern actually has the gap token.
+    assert _GAP in pat
+    rule = build_yara_rule(
+        "test_gap_rule",
+        [YaraBytePattern("$gap_test", pat)],
+        "$gap_test",
+    )
+    assert "test_gap_rule" in rule
+
+
+def test_gap_default_is_off_in_set_default():
+    # set_default_check_box_values() must NOT enable cInterInstructionGaps (opt-in only).
+    s = SettingsDialog()
+    s.set_default_check_box_values()
+    assert not s.cInterInstructionGaps.checked
+
+
+def test_gap_invariant_fuzz_self_match():
+    # Focused fuzz: with gaps enabled, a generated pattern must still full-match the
+    # gapless source bytes (gap=0 path through the {0,2*K} quantifier).
+    rng = random.Random(0xDEADBEEF)
+    md32 = Cs(CS_ARCH_X86, CS_MODE_32)
+    md32.detail = True
+    md64 = Cs(CS_ARCH_X86, CS_MODE_64)
+    md64.detail = True
+
+    s = _gap_settings(gaps=True)
+    checked = 0
+
+    for _ in range(300):
+        length = rng.randint(2, 8)
+        code = bytes(rng.randint(0, 255) for _ in range(length))
+        bits = rng.choice((32, 64))
+        _set_bitness(bits)
+        md = md32 if bits == 32 else md64
+
+        instrs = list(md.disasm(code, 0x401000))
+        if len(instrs) < 2:
+            continue  # need at least 2 instructions to exercise the gap path
+        consumed_hex = "".join(i.bytes.hex().upper() for i in instrs)
+
+        result = create_pattern_from_code(md, code, 0x401000, s)
+        assert _GAP in result.pattern, f"no gap in pattern for {consumed_hex}: {result.pattern}"
+        regex = _pattern_to_regex(result.pattern)
+        assert re.fullmatch(regex, consumed_hex), (
+            f"gapped pattern does not match source bytes\n"
+            f"  bitness={bits}\n"
+            f"  bytes={consumed_hex}\n"
+            f"  pattern={result.pattern}\n"
+            f"  regex={regex}\n"
+            f"  disasm={[f'{i.mnemonic} {i.op_str}'.strip() for i in instrs]}"
+        )
+        checked += 1
+
+    assert checked > 50, f"too few cases checked: {checked}"
