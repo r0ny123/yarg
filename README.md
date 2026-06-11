@@ -50,7 +50,9 @@ Let's consider that parts.
 
 #### Instruction prefix
 
-Currently only the REX prefix parameterized as **4?**.
+The REX prefix is parameterized as **4?** by default. With *Hold REX.W fixed* enabled, the
+operand-size bit (W) is held to its observed value while only the register-extension bits
+(R/X/B) vary, so a 64-bit-operand instruction no longer matches its 32-bit-operand cousin.
 
 #### Mod R/M
 
@@ -84,6 +86,33 @@ SIB byte parametersized the same way as **Mod R/M** byte but *Scale* fixed inste
 
 If Displacement/Immediate value is an address or offset special trick are used. Because actual code placed in 
 small range of addresses, some bytes can be fixed (last 2 or 1 byte).
+
+## Encoding-tolerance options
+
+Beyond operand parameterization, YarG can emit alternative-but-equivalent encodings so a rule
+keeps matching the same code across different compilers, optimization levels, and code
+generators. Each is toggled in the settings dialog's *Pattern optimization* group:
+
+* **Branch short/near encoding variants** — `Jcc`/`JMP` emit both the short (rel8) and near
+  (rel16/32) forms, e.g. `( 75 ?? | 0F 85 ?? ?? ?? ?? )`, since compilers pick the form by
+  target distance.
+* **Accumulator encoding variants** — `op eAX/AL, imm` ALU/`TEST` instructions emit the
+  accumulator short form, the generic `/r` form, and the sign-extended `83 /r` form, e.g.
+  `add eax, 0x10` → `( 05 10 00 00 00 | 81 C0 10 00 00 00 | 83 C0 10 )`.
+* **Stack-frame disp8/disp32 size variants** — `[rsp/rbp ± disp]` accesses match both the
+  1-byte and 4-byte displacement encodings.
+* **Hold REX.W fixed** — keep operand size pinned while register-extension bits vary (see the
+  *Instruction prefix* note above).
+* **Atom governor** — ensures every generated block keeps a fixed-byte run YARA can use as a
+  scan atom, so heavily parameterized blocks stay fast to scan and still compile.
+* **Weighted block voting** — function rules require a majority of the *discriminating*
+  basic blocks, dropping boilerplate that would otherwise match everywhere.
+* **Inter-instruction gap wildcards** *(opt-in, off by default)* — insert a bounded `[0-4]`
+  jump between instructions to tolerate inserted NOPs, padding, or minor code motion. Raises
+  recall at the cost of precision, so enable it deliberately.
+
+Every generated pattern is still guaranteed to match the exact bytes it was built from; this
+invariant is enforced by a differential fuzz test across both bitnesses.
 
 ## References
 

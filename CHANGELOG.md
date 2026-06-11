@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-06-11
+
+### Added
+- Branch short/near encoding variants: `Jcc`/`JMP` instructions emit both the rel8 and rel16/32 encodings as a lossless alternation, so a rule matches the same branch regardless of which form the compiler chose by target distance. Suppressed when a legacy prefix is present (an operand-size prefix changes the counterpart's length). Gated by the "Branch short/near encoding variants" setting.
+- Accumulator ↔ generic-ModR/M encoding variants: ALU and `TEST` instructions on the accumulator (`AL`/`AX`/`EAX`/`RAX`) with an immediate emit all valid encodings — the accumulator short form, the generic `/r` form, and the sign-extended `83 /r` form when the immediate fits a signed byte. Gated by "Accumulator encoding variants".
+- Stack-frame disp8/disp32 size variants: `[rsp/rbp ± disp]` accesses emit both the disp8 (`mod=01`) and disp32 (`mod=10`) encodings as a whole-instruction alternation, tolerating frame-layout changes that resize the displacement. Gated by "Stack-frame disp8/disp32 size variants".
+- Atom governor: guarantees each generated basic-block pattern retains at least one 2-byte run of fixed bytes, so YARA can extract a usable scan atom; heavily parameterized blocks no longer degrade into a slow full scan or fail to compile. Single-instruction selections are left untouched. Gated by "Atom governor".
+- Distinctiveness-weighted block voting: function rules threshold on the discriminating (atom-bearing) blocks and drop promiscuous boilerplate (e.g. a lone `ret`) when stronger blocks exist, raising precision; falls back to all blocks when none are discriminating. Gated by "Weighted block voting".
+- Bounded inter-instruction gap wildcards: optional `[0-4]` jumps between block instructions tolerate inserted NOPs, padding, or a reordered independent instruction. Opt-in and disabled by default as it is false-positive sensitive. Gated by "Inter-instruction gap wildcards".
+- Extended the differential fuzz suite and added exact-output regression tests covering every new encoding variant, the atom metric, and `[m-n]` jump translation.
+
+### Changed
+- REX prefix parameterization can now hold the operand-size bit (`REX.W`) fixed while keeping the register-extension bits (`R`/`X`/`B`) variable, so register substitution no longer conflates a 64-bit-operand instruction with its 32-bit-operand cousin. Previously the whole REX low nibble was wildcarded as `4?`. Gated by "Hold REX.W fixed".
+- `pattern_to_regex` (and the fuzz harness equivalent) now understands YARA `[m-n]` jump tokens, translating them to bounded regex quantifiers so the self-match invariant is verified for gapped patterns too.
+
 ## [1.0.5] - 2026-06-10
 
 ### Changed
