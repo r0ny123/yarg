@@ -233,8 +233,8 @@ def test_longest_fixed_run_treats_alternation_groups_as_breaks():
 
 
 def test_pattern_atom_ok_threshold():
-    assert pattern_atom_ok("8BEC")          # 2-byte run
-    assert not pattern_atom_ok("E8????")    # only a 1-byte opcode anchor
+    assert pattern_atom_ok("8BEC")  # 2-byte run
+    assert not pattern_atom_ok("E8????")  # only a 1-byte opcode anchor
     assert not pattern_atom_ok("(EB??|E9????)")
     assert pattern_atom_ok("8B", min_atom=1)
 
@@ -242,6 +242,7 @@ def test_pattern_atom_ok_threshold():
 # ---------------------------------------------------------------------------
 # R7: weighted_voting tests
 # ---------------------------------------------------------------------------
+
 
 def test_weighted_voting_drops_weak_keeps_strong():
     # 558BEC is strong (3-byte fixed run); C3 is weak (1-byte fixed run).
@@ -258,9 +259,9 @@ def test_weighted_voting_drops_weak_keeps_strong():
         weighted_voting=True,
     )
 
-    assert "$code_at_00401000" in rule          # strong block present
-    assert "$code_at_00401010" not in rule       # weak block dropped
-    assert "1 of ($code_at_*)" in rule           # threshold over 1 strong block
+    assert "$code_at_00401000" in rule  # strong block present
+    assert "$code_at_00401010" not in rule  # weak block dropped
+    assert "1 of ($code_at_*)" in rule  # threshold over 1 strong block
     yara_x.compile(rule)
 
 
@@ -278,9 +279,9 @@ def test_weighted_voting_all_weak_falls_back_to_flat():
         weighted_voting=True,
     )
 
-    assert "$code_at_00401000" in rule           # both blocks present
+    assert "$code_at_00401000" in rule  # both blocks present
     assert "$code_at_00401001" in rule
-    assert "2 of ($code_at_*)" in rule           # flat threshold for 2 blocks
+    assert "2 of ($code_at_*)" in rule  # flat threshold for 2 blocks
     yara_x.compile(rule)
 
 
@@ -306,22 +307,22 @@ def test_weighted_voting_multiple_strong_threshold():
     # 3 strong blocks, 2 weak blocks.
     # Weighted path keeps 3 strong blocks.
     # half_plus_one = (3//2)+1 = 2 ; required = min(2 + 2//2, 3) = min(3, 3) = 3
-    strong_block = "558BEC"   # 3-byte fixed run — strong
-    weak_block = "C3"         # 1-byte fixed run — weak
+    strong_block = "558BEC"  # 3-byte fixed run — strong
+    weak_block = "C3"  # 1-byte fixed run — weak
 
     blocks = [
         (0x401000, strong_block, [YaraInstructionComment(0x401000, "558bec", "push rbp")]),
         (0x401010, strong_block, [YaraInstructionComment(0x401010, "558bec", "push rbp")]),
         (0x401020, strong_block, [YaraInstructionComment(0x401020, "558bec", "push rbp")]),
-        (0x401030, weak_block,   [YaraInstructionComment(0x401030, "c3", "ret")]),
-        (0x401040, weak_block,   [YaraInstructionComment(0x401040, "c3", "ret")]),
+        (0x401030, weak_block, [YaraInstructionComment(0x401030, "c3", "ret")]),
+        (0x401040, weak_block, [YaraInstructionComment(0x401040, "c3", "ret")]),
     ]
     rule = build_function_rule(0x401000, blocks, 32, "code_at_", weighted_voting=True)
 
     assert "$code_at_00401000" in rule
     assert "$code_at_00401010" in rule
     assert "$code_at_00401020" in rule
-    assert "$code_at_00401030" not in rule       # weak — dropped
-    assert "$code_at_00401040" not in rule       # weak — dropped
+    assert "$code_at_00401030" not in rule  # weak — dropped
+    assert "$code_at_00401040" not in rule  # weak — dropped
     assert "3 of ($code_at_*)" in rule
     yara_x.compile(rule)

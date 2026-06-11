@@ -278,9 +278,7 @@ class OperandParameterizer:
         sib_op = self.locator.locate(OPERAND_SIB)
 
         is_stack_rm_base = (
-            rm_op is not None
-            and self.modrm.is_mem_with_rm_base_reg_and_disp()
-            and is_stack_reg(rm_op.mem.base)
+            rm_op is not None and self.modrm.is_mem_with_rm_base_reg_and_disp() and is_stack_reg(rm_op.mem.base)
         )
         is_stack_sib_base = (
             sib_op is not None

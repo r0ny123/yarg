@@ -413,11 +413,11 @@ def test_accum_disabled_emits_single_encoding():
 def test_accum_variants_self_match_source_bytes():
     # The native form must match its own source bytes for every case.
     cases = [
-        (b"\x04\x05", 32),            # add al, 5
+        (b"\x04\x05", 32),  # add al, 5
         (b"\x05\x10\x00\x00\x00", 32),  # add eax, 0x10
-        (b"\xa8\x05", 32),            # test al, 5
+        (b"\xa8\x05", 32),  # test al, 5
         (b"\xa9\x10\x00\x00\x00", 32),  # test eax, 0x10
-        (b"\x3c\x05", 32),            # cmp al, 5
+        (b"\x3c\x05", 32),  # cmp al, 5
         (b"\x3d\x10\x00\x00\x00", 32),  # cmp eax, 0x10
         (b"\x48\x05\x10\x00\x00\x00", 64),  # add rax, 0x10
         (b"\x2d\x00\x02\x00\x00", 32),  # sub eax, 0x200 (no 83 form)

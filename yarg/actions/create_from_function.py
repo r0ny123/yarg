@@ -62,7 +62,9 @@ class CreatePatternFromFunctionHandler(kw.action_handler_t):
             )
 
         try:
-            yar_rule = build_function_rule(ea, block_patterns, bitness, VAR_NAME, weighted_voting=settings.cWeightedBlockVoting.checked)
+            yar_rule = build_function_rule(
+                ea, block_patterns, bitness, VAR_NAME, weighted_voting=settings.cWeightedBlockVoting.checked
+            )
         except YaraOutputError as exc:
             kw.warning(f"[YarG] {exc}")
             return 0

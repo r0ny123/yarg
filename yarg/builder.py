@@ -323,7 +323,9 @@ def format_debug_table(headers, row) -> str:
     return f"{header_line}\n{separator}\n{row_line}"
 
 
-def special_templates(instr, dw_opcode, settings: SettingsDialog, db=None, has_legacy_prefix: bool = False) -> str | None:
+def special_templates(
+    instr, dw_opcode, settings: SettingsDialog, db=None, has_legacy_prefix: bool = False
+) -> str | None:
     """
     Processing special opcodes
     :param instr:  Capstone instruction CsInsn
