@@ -30,7 +30,7 @@ from capstone import Cs, CS_ARCH_X86, CS_MODE_32, CS_MODE_64
 
 from yarg.builder import create_pattern_from_code, INTER_INSTRUCTION_GAP
 from yarg.utils import SettingsDialog
-from yarg.yara_output import pattern_atom_ok, build_yara_rule, YaraBytePattern
+from yarg.yara_output import pattern_atom_ok, longest_fixed_run, build_yara_rule, YaraBytePattern
 
 _HEX = set("0123456789ABCDEFabcdef")
 
@@ -169,7 +169,7 @@ def _branch_settings(branch: bool = True, governor: bool = False) -> SettingsDia
 
 def test_short_jcc_emits_short_and_near_alternation_when_enabled():
     # 74 05 = jz short (rel8) -> pair with the 0F 84 rel32 near form.
-    assert _patternize(b"\x74\x05", _branch_settings(branch=True)) == "(74??|0F84????)"
+    assert _patternize(b"\x74\x05", _branch_settings(branch=True)) == "(74??|0F84????????)"
 
 
 def test_short_jcc_keeps_single_encoding_when_disabled():
@@ -184,7 +184,7 @@ def test_near_jcc_pairs_with_short_form():
 
 
 def test_short_jmp_pairs_with_near_form():
-    assert _patternize(b"\xeb\x05", _branch_settings(branch=True)) == "(EB??|E9????)"
+    assert _patternize(b"\xeb\x05", _branch_settings(branch=True)) == "(EB??|E9????????)"
 
 
 def test_near_jmp_pairs_with_short_form():
@@ -230,7 +230,7 @@ def test_atom_governor_leaves_single_instruction_untouched():
     on = SettingsDialog()
     on.set_default_check_box_values()
     pat = _patternize(b"\xeb\x05", on)
-    assert pat == "(EB??|E9????)"
+    assert pat == "(EB??|E9????????)"
     assert not pattern_atom_ok(pat)
 
 
@@ -249,12 +249,12 @@ def _rex_settings(rex_fixed: bool) -> SettingsDialog:
 def test_rex_w1_fixed_emits_high_nibble_alternation():
     # 48 8B 45 FC = mov rax, qword ptr [rbp-4]; REX=0x48 (W=1). Holding W fixed keeps the
     # high half of the low nibble {8..F}, leaving R/X/B free.
-    assert _patternize(b"\x48\x8b\x45\xfc", _rex_settings(True), bits=64) == "4(8|9|A|B|C|D|E|F)8B45FC"
+    assert _patternize(b"\x48\x8b\x45\xfc", _rex_settings(True), bits=64) == "(48|49|4A|4B|4C|4D|4E|4F)8B45FC"
 
 
 def test_rex_w0_fixed_emits_low_nibble_alternation():
     # 44 8B 45 FC = mov r8d, dword ptr [rbp-4]; REX=0x44 (W=0). W fixed keeps {0..7}.
-    assert _patternize(b"\x44\x8b\x45\xfc", _rex_settings(True), bits=64) == "4(0|1|2|3|4|5|6|7)8B45FC"
+    assert _patternize(b"\x44\x8b\x45\xfc", _rex_settings(True), bits=64) == "(40|41|42|43|44|45|46|47)8B45FC"
 
 
 def test_rex_off_keeps_full_nibble_wildcard():
@@ -324,7 +324,7 @@ def test_rex_w_and_disp_variant_compose():
     # the mem tail independently.
     s = _disp_settings()
     s.cRexOperandSizeFixed.checked = True
-    assert _patternize(b"\x48\x89\x45\xfc", s, bits=64) == "4(8|9|A|B|C|D|E|F)89(45??|85????????)"
+    assert _patternize(b"\x48\x89\x45\xfc", s, bits=64) == "(48|49|4A|4B|4C|4D|4E|4F)89(45??|85????????)"
 
 
 def test_disp_variants_self_match_source_bytes():
@@ -395,6 +395,74 @@ def test_accum_cmp_eax_imm32_three_forms():
     # cmp eax,0x10 (3D 10 00 00 00) -> native | 81 /7 | 83 /7
     pat = _patternize(b"\x3d\x10\x00\x00\x00", _accum_settings(), bits=32)
     assert pat == "(3D10000000|81F810000000|83F810)"
+
+
+# --- Review regressions: alternates must be valid YARA and the correct width --------------
+
+
+def _compiles(pattern: str) -> None:
+    # build_yara_rule runs yara_x.compile (plus a format round-trip); raises YaraOutputError
+    # if the pattern is not valid YARA. The self-match check alone never exercises this.
+    build_yara_rule("regression_rule", [YaraBytePattern("$code", pattern)], "$code")
+
+
+def test_rex_w_fixed_alternation_is_whole_byte_and_compiles():
+    # P1: REX.W-fixed must enumerate whole bytes (48|49|...), not a nibble literal + nibble
+    # alternation 4(8|9|...), which is invalid YARA and is rejected by yara_x.compile.
+    pat = _patternize(b"\x48\x8b\x45\xfc", _rex_settings(True), bits=64)
+    assert pat == "(48|49|4A|4B|4C|4D|4E|4F)8B45FC"
+    _compiles(pat)
+
+
+def test_short_jcc_near_variant_matches_full_rel32_encoding():
+    # P2: the near Jcc counterpart needs a 4-byte rel32 displacement (8 nibbles), so the
+    # alternation must match the actual 0F 8x rel32 encoding rather than stopping two bytes early.
+    pat = _patternize(b"\x74\x05", _branch_settings(branch=True))
+    assert pat == "(74??|0F84????????)"
+    rx = _pattern_to_regex(pat)
+    assert re.fullmatch(rx, "7405")  # short (rel8) source
+    assert re.fullmatch(rx, "0F8412345678")  # near (rel32) encoding, 6 bytes
+
+
+def test_short_jmp_near_variant_matches_full_rel32_encoding():
+    pat = _patternize(b"\xeb\x05", _branch_settings(branch=True))
+    assert pat == "(EB??|E9????????)"
+    rx = _pattern_to_regex(pat)
+    assert re.fullmatch(rx, "EB05")  # short
+    assert re.fullmatch(rx, "E912345678")  # near E9 rel32, 5 bytes
+
+
+def test_longest_fixed_run_skips_jump_tokens():
+    # The atom metric must treat a [m-n] jump as a break, not count its characters as bytes.
+    assert longest_fixed_run("90[0-4]90") == 1
+    assert longest_fixed_run("8BEC[0-4]90") == 2
+    assert not pattern_atom_ok("90[0-4]90")
+    assert pattern_atom_ok("8BEC[0-4]90")
+
+
+def test_featured_blocks_compile_as_yara():
+    # The self-match invariant never exercises yara_x; compile a spread of fully-featured
+    # multi-instruction blocks (those with an atom) so malformed alternates are caught broadly.
+    rng = random.Random(0x5EED)
+    modes = {32: Cs(CS_ARCH_X86, CS_MODE_32), 64: Cs(CS_ARCH_X86, CS_MODE_64)}
+    for md in modes.values():
+        md.detail = True
+    s = SettingsDialog()
+    s.set_default_check_box_values()
+    s.cInterInstructionGaps.checked = True  # exercise jump tokens too
+    compiled = 0
+    for _ in range(300):
+        bits = rng.choice((32, 64))
+        _set_bitness(bits)
+        code = bytes(rng.randint(0, 255) for _ in range(rng.randint(2, 12)))
+        if not list(modes[bits].disasm(code, 0x401000)):
+            continue
+        pat = create_pattern_from_code(modes[bits], code, 0x401000, s).pattern
+        if not pattern_atom_ok(pat):
+            continue  # YARA legitimately rejects atomless strings; not what we're testing here
+        _compiles(pat)
+        compiled += 1
+    assert compiled > 50
 
 
 def test_accum_zbit_large_imm_has_no_83_form():
