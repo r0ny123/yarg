@@ -52,6 +52,40 @@ def _safe_comment_text(value: str) -> str:
     return value.replace("*/", "* /").strip()
 
 
+def longest_fixed_run(pattern: str) -> int:
+    """Length, in bytes, of the longest run of fully-fixed bytes in a YARA hex pattern.
+
+    Approximates the strongest *atom* YARA can extract for fast Aho-Corasick prefiltering.
+    A byte containing ``?`` and an alternation group ``(...)`` both break the run: neither
+    yields a single fixed substring usable as a global atom. A pattern whose longest run is
+    below ~2 bytes forces YARA into a slow full scan (and may be rejected as too generic).
+    """
+    best = current = 0
+    i, n = 0, len(pattern)
+    while i < n:
+        if pattern[i] == "(":
+            depth = 1
+            i += 1
+            while i < n and depth:
+                depth += (pattern[i] == "(") - (pattern[i] == ")")
+                i += 1
+            current = 0
+            continue
+        byte = pattern[i : i + 2]
+        i += 2
+        if len(byte) == 2 and "?" not in byte:
+            current += 1
+            best = max(best, current)
+        else:
+            current = 0
+    return best
+
+
+def pattern_atom_ok(pattern: str, min_atom: int = 2) -> bool:
+    """Whether ``pattern`` has a fixed-byte run long enough to anchor an efficient YARA atom."""
+    return longest_fixed_run(pattern) >= min_atom
+
+
 def render_instruction_comments(annotations: Sequence[YaraInstructionComment]) -> str:
     if not annotations:
         return ""

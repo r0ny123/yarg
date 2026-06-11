@@ -1,6 +1,7 @@
 from binascii import hexlify
 
 from .ida_domain_bridge import has_xrefs_to
+from .encoding import ModRm, Sib, Displacement
 from .locator import *
 from .utils import SettingsDialog, is_gp_reg, is_stack_reg, TEMPLATE_SYMBOL, get_bitness, dbg_print, __debugmode__
 
@@ -227,6 +228,122 @@ class OperandParameterizer:
         # Use the clamped displacement bytes captured by Displacement rather than the raw
         # instr.disp_size, so a bogus size reported by the disassembler cannot leak in here.
         return self.disp.data.hex().upper()
+
+    def _disp_template_for(self, disp: "Displacement", modrm: "ModRm", sib: "Sib | None", settings: SettingsDialog):
+        """Render the displacement template for a hypothetical (flipped-mod) memory operand.
+
+        Mirrors the stack/GP-base branches of ``parameterize_disp`` for a synthetic
+        ``Displacement``/``ModRm`` pair, so the alternate disp8<->disp32 encoding respects the
+        very same wildcarding the native form got. Only the stack/GP base-register cases are
+        reachable here (the caller gates on a stack base), so address/RIP/no-base paths are
+        intentionally not reproduced.
+        """
+        rm_op = self.locator.locate(OPERAND_MODRM_RM)
+        sib_op = self.locator.locate(OPERAND_SIB)
+
+        if rm_op and modrm.is_mem_with_rm_base_reg_and_disp() and is_gp_reg(rm_op.mem.base):
+            if settings.cGpDisplacementParam.checked:
+                return disp.parameterize_default(settings)
+        if rm_op and modrm.is_mem_with_rm_base_reg_and_disp() and is_stack_reg(rm_op.mem.base):
+            if settings.cSDisplacementParam.checked:
+                return disp.parameterize_default(settings)
+        if sib_op and modrm.is_mem_with_sib_and_disp() and is_gp_reg(sib_op.mem.base):
+            if settings.cGpDisplacementParam.checked:
+                return disp.parameterize_default(settings)
+        if sib_op and modrm.is_mem_with_sib_and_disp() and is_stack_reg(sib_op.mem.base):
+            if settings.cSDisplacementParam.checked:
+                return disp.parameterize_default(settings)
+
+        return disp.data.hex().upper()
+
+    def stack_disp_size_variant(self, native_modrm_t: str, sib_t: str, native_disp_t: str, settings: SettingsDialog):
+        """Build the alternate disp8<->disp32 encoding tail for a stack-frame memory operand.
+
+        A compiler may encode the same frame access with a 1-byte (disp8, ModRM mod=01) or
+        4-byte (disp32, ModRM mod=10) displacement. This flips the ModRM mod bits *and* changes
+        length, so it is emitted as a whole-instruction-tail alternation, not a field wildcard.
+
+        Returns the alternate tail string ``modrm+sib+disp`` (same prefix/REX/opcode/reg bits,
+        flipped mod, unchanged SIB, resized displacement), or ``None`` when the instruction is
+        not a transformable stack-frame access (no displacement, non-stack base, or a disp32
+        whose signed value does not fit in an int8 so no disp8 alternate exists).
+        """
+        if self.modrm is None or self.disp is None:
+            return None
+        if self.modrm.mod not in (1, 2):
+            return None
+
+        # Identify a stack base, either a direct rm base (rbp/ebp) or a SIB base (rsp/esp/rbp/ebp).
+        rm_op = self.locator.locate(OPERAND_MODRM_RM)
+        sib_op = self.locator.locate(OPERAND_SIB)
+
+        is_stack_rm_base = (
+            rm_op is not None
+            and self.modrm.is_mem_with_rm_base_reg_and_disp()
+            and is_stack_reg(rm_op.mem.base)
+        )
+        is_stack_sib_base = (
+            sib_op is not None
+            and self.modrm.is_mem_with_sib_and_disp()
+            and self.sib is not None
+            and self.sib.is_mem_with_base_reg()
+            and is_stack_reg(sib_op.mem.base)
+        )
+        if not (is_stack_rm_base or is_stack_sib_base):
+            return None
+
+        if self.modrm.mod == 1:
+            # disp8 source -> sign-extend to a 4-byte disp32 alternate (mod=10). Always valid.
+            new_mod = 2
+            value = self.disp.disp
+            new_data = (value & 0xFFFFFFFF).to_bytes(4, "little")
+        else:
+            # disp32 source -> emit a disp8 alternate (mod=01) only if it fits in a signed byte.
+            if not (-128 <= self.disp.disp <= 127):
+                return None
+            new_mod = 1
+            value = self.disp.disp
+            new_data = (value & 0xFF).to_bytes(1, "little")
+
+        alt_modrm = ModRm(
+            mod=new_mod,
+            reg=self.modrm.reg,
+            rm=self.modrm.rm,
+            reg_ext=self.modrm.reg_ext,
+            rm_ext=self.modrm.rm_ext,
+        )
+        alt_sib = None
+        if self.sib is not None:
+            alt_sib = Sib(
+                mod=new_mod,
+                scale=self.sib.scale,
+                index=self.sib.index,
+                base=self.sib.base,
+                index_ext=self.sib.index_ext,
+                base_ext=self.sib.base_ext,
+            )
+        alt_disp = Displacement(
+            disp=value,
+            offset=self.disp.offset,
+            size=len(new_data),
+            data=new_data,
+            modrm=alt_modrm,
+            sib=alt_sib,
+        )
+
+        # Recompute the ModRM template under the flipped mod, preserving the native reg/rm
+        # parameterization. parameterize_modrm_byte's i/j choice is mod-independent, so the
+        # same rotation applies; only the literal mod bits differ.
+        alt_op_modrm = self.modrm
+        self.modrm = alt_modrm
+        try:
+            alt_modrm_t = self.parameterize_modrm_byte(settings)
+        finally:
+            self.modrm = alt_op_modrm
+
+        alt_disp_t = self._disp_template_for(alt_disp, alt_modrm, alt_sib, settings)
+
+        return alt_modrm_t + sib_t + alt_disp_t
 
     def parameterize_imm(self, settings: SettingsDialog):
         """

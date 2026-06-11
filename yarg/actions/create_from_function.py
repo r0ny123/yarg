@@ -7,7 +7,7 @@ from ..builder import create_pattern_from_code
 from ..ida_domain_bridge import current_database, get_function_at, iter_basic_blocks
 from ..rule_viewer import show_yara_rule
 from ..utils import VAR_NAME, SettingsDialog, __ver_major__, __ver_minor__, get_bitness
-from ..yara_output import YaraOutputError, build_function_rule
+from ..yara_output import YaraOutputError, build_function_rule, pattern_atom_ok
 
 
 class CreatePatternFromFunctionHandler(kw.action_handler_t):
@@ -53,6 +53,13 @@ class CreatePatternFromFunctionHandler(kw.action_handler_t):
         except Exception as exc:
             kw.warning(f"[YarG] Could not access the IDA database: {exc}")
             return 0
+
+        weak_blocks = [block_ea for block_ea, pattern, _ in block_patterns if not pattern_atom_ok(pattern)]
+        if weak_blocks:
+            print(
+                f"[YarG] {len(weak_blocks)}/{len(block_patterns)} block(s) lack a 2-byte fixed atom "
+                f"(weak YARA prefilter): {', '.join(hex(b) for b in weak_blocks)}"
+            )
 
         try:
             yar_rule = build_function_rule(ea, block_patterns, bitness, VAR_NAME)

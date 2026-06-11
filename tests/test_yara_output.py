@@ -8,6 +8,8 @@ from yarg.yara_output import (
     build_code_rule,
     build_function_rule,
     build_yara_rule,
+    longest_fixed_run,
+    pattern_atom_ok,
     render_byte_string,
     sanitize_identifier,
 )
@@ -213,3 +215,25 @@ def test_function_rule_threshold_caps_correctly_for_five_blocks():
     blocks = [(0x401000 + i * 0x10, "90", [YaraInstructionComment(0x401000 + i * 0x10, "90", "nop")]) for i in range(5)]
     rule = build_function_rule(0x401000, blocks, 32, "code_at_")
     assert "4 of ($code_at_*)" in rule
+
+
+def test_longest_fixed_run_counts_contiguous_fixed_bytes():
+    assert longest_fixed_run("558BEC") == 3
+    assert longest_fixed_run("55??8BEC") == 2  # the 8B EC run; the 55 run is broken by ??
+    assert longest_fixed_run("E8????") == 1
+    assert longest_fixed_run("90") == 1
+
+
+def test_longest_fixed_run_treats_alternation_groups_as_breaks():
+    # A group yields no global atom, so it breaks the surrounding fixed run.
+    assert longest_fixed_run("90(74??|0F84????)90") == 1
+    assert longest_fixed_run("(EB??|E9????)") == 0
+    # Fixed bytes adjacent to (but outside) the group still count.
+    assert longest_fixed_run("8BEC(C0|C1)") == 2
+
+
+def test_pattern_atom_ok_threshold():
+    assert pattern_atom_ok("8BEC")          # 2-byte run
+    assert not pattern_atom_ok("E8????")    # only a 1-byte opcode anchor
+    assert not pattern_atom_ok("(EB??|E9????)")
+    assert pattern_atom_ok("8B", min_atom=1)

@@ -26,6 +26,10 @@ class SettingsDialog:
         self.cFoldSameHigh4bit = _CheckControl()
         self.cFoldSameLow4bit = _CheckControl()
         self.cStripWildCards = _CheckControl()
+        self.cBranchEncodingVariants = _CheckControl()
+        self.cAtomGovernor = _CheckControl()
+        self.cRexOperandSizeFixed = _CheckControl()
+        self.cStackDispSizeVariants = _CheckControl()
         self.cTrackBasicBlockSequences = _CheckControl()
         self.cImmediateParam = _CheckControl()
         self.cGpImmParam = _CheckControl()
@@ -117,6 +121,10 @@ class SettingsDialog:
                     ("Alternatives with same low 4 bits are folding", self.cFoldSameLow4bit),
                     ("Alternatives with same high 4 bits are folding", self.cFoldSameHigh4bit),
                     ("Strip trailing wildcards", self.cStripWildCards),
+                    ("Branch short/near encoding variants", self.cBranchEncodingVariants),
+                    ("Atom governor (keep a fixed-byte anchor per block)", self.cAtomGovernor),
+                    ("Hold REX.W fixed (operand-size precise)", self.cRexOperandSizeFixed),
+                    ("Stack-frame disp8/disp32 size variants", self.cStackDispSizeVariants),
                 ],
             ),
             self._checkbox_group(
@@ -170,6 +178,10 @@ class SettingsDialog:
         self.cFoldSameLow4bit.checked = True
         self.cSImmParam.checked = True
         self.cStripWildCards.checked = True
+        self.cBranchEncodingVariants.checked = True
+        self.cAtomGovernor.checked = True
+        self.cRexOperandSizeFixed.checked = True
+        self.cStackDispSizeVariants.checked = True
         self.cSDisplacementParam.checked = True
         self.check_all_gp(self.is_gp_enabled)
         self.check_all_sp(self.is_sp_enabled)
